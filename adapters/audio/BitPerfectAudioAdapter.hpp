@@ -1,45 +1,51 @@
 #pragma once
 
 #include "core/ports/IAudioEnginePort.hpp"
-#include <atomic>
-#include <chrono>
+#include <QObject>
+#include <QMediaPlayer>
+#include <QAudioOutput>
+#include <memory>
 #include <mutex>
+#include <functional>
 #include <string>
 
 namespace adapters {
 
 /**
- * @brief Bit-perfect audio engine adapter with precise stream tracking.
+ * @brief Bit-perfect audio engine adapter powered by Qt 6 Multimedia & FFmpeg backend.
  */
-class BitPerfectAudioAdapter : public core::IAudioEnginePort {
-public:
-  BitPerfectAudioAdapter();
-  ~BitPerfectAudioAdapter() override;
+class BitPerfectAudioAdapter : public QObject, public core::IAudioEnginePort {
+    Q_OBJECT
 
-  bool initialize(uint32_t sampleRate = 44100, uint8_t channels = 2) override;
-  bool load(const std::string &filePath) override;
-  bool play() override;
-  bool pause() override;
-  bool stop() override;
-  bool seek(uint64_t positionMs) override;
-  void setVolume(float volume) override;
-  float getVolume() const override;
-  uint64_t getPositionMs() const override;
-  uint64_t getDurationMs() const override;
-  bool isPlaying() const override;
-  core::AudioStreamInfo getStreamInfo() const override;
+public:
+    explicit BitPerfectAudioAdapter(QObject* parent = nullptr);
+    ~BitPerfectAudioAdapter() override;
+
+    bool initialize(uint32_t sampleRate = 44100, uint8_t channels = 2) override;
+    bool load(const std::string& filePath) override;
+    bool play() override;
+    bool pause() override;
+    bool stop() override;
+    bool seek(uint64_t positionMs) override;
+    void setVolume(float volume) override;
+    float getVolume() const override;
+    uint64_t getPositionMs() const override;
+    uint64_t getDurationMs() const override;
+    bool isPlaying() const override;
+    core::AudioStreamInfo getStreamInfo() const override;
+
+    void setEndOfTrackCallback(std::function<void()> callback) override;
+
+signals:
+    void playbackFinished();
 
 private:
-  std::string m_currentFilePath;
-  std::atomic<bool> m_isPlaying{false};
-  std::atomic<bool> m_isPaused{false};
-  std::atomic<float> m_volume{0.8f};
-  std::atomic<uint64_t> m_positionMs{0};
-  std::atomic<uint64_t> m_durationMs{0};
-
-  core::AudioStreamInfo m_streamInfo;
-  mutable std::mutex m_mutex;
-  std::chrono::steady_clock::time_point m_lastPlayTime;
+    std::unique_ptr<QMediaPlayer> m_player;
+    std::unique_ptr<QAudioOutput> m_audioOutput;
+    core::AudioStreamInfo m_streamInfo;
+    mutable std::mutex m_mutex;
+    std::function<void()> m_endOfTrackCallback;
+    std::string m_currentFilePath;
 };
 
 } // namespace adapters
