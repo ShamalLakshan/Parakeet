@@ -1,0 +1,45 @@
+# Build and Output Directories
+build/
+bin/
+lib/
+out/
+docs/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Qt & QML generated files
+.qt/
+.rcc/
+.qmlls.ini
+*.qmlc
+*.jsc
+*.moc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# IDE and Editor Directories / Files
+.qtcreator/
+*.user
+*.user.*
+.vscode/
+.idea/
+*.swp
+*~
+.directory
+
+# Local Databases, Caches & Logs
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.log
+
+
+# OS-specific files
+.DS_Store
+Thumbs.db
