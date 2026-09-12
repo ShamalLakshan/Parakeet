@@ -11,11 +11,13 @@
 
 #include "core/services/PlayerService.hpp"
 #include "core/services/LibraryService.hpp"
+#include "core/services/QueueService.hpp"
 #include "models/AlbumListModel.hpp"
 #include "models/TrackListModel.hpp"
+#include "theming/ThemeLoader.hpp"
 
 /**
- * @brief Audiophile UI Bridge exposing domain services, state, and models to Qt Quick.
+ * @brief Bridge exposing player services, library data, and theme tokens to QML.
  */
 class QtBridge : public QObject {
     Q_OBJECT
@@ -25,6 +27,9 @@ class QtBridge : public QObject {
     Q_PROPERTY(TrackListModel* trackModel READ trackModel CONSTANT)
     Q_PROPERTY(TrackListModel* albumDetailTrackModel READ albumDetailTrackModel CONSTANT)
     Q_PROPERTY(TrackListModel* queueTrackModel READ queueTrackModel CONSTANT)
+
+    // Theming Engine
+    Q_PROPERTY(adapters::ThemeLoader* theme READ theme CONSTANT)
 
     // Current Playing Track State
     Q_PROPERTY(QString currentTrackTitle READ currentTrackTitle NOTIFY playbackChanged)
@@ -50,6 +55,13 @@ class QtBridge : public QObject {
     Q_PROPERTY(float volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(bool isMuted READ isMuted NOTIFY volumeChanged)
 
+    // Queue & Playback Modes
+    Q_PROPERTY(int repeatMode READ repeatMode WRITE setRepeatMode NOTIFY playbackModeChanged)
+    Q_PROPERTY(int shuffleMode READ shuffleMode WRITE setShuffleMode NOTIFY playbackModeChanged)
+    Q_PROPERTY(int queueRemainingCount READ queueRemainingCount NOTIFY queueChanged)
+    Q_PROPERTY(QString queueRemainingDurationStr READ queueRemainingDurationStr NOTIFY queueChanged)
+    Q_PROPERTY(int upNextCount READ upNextCount NOTIFY queueChanged)
+
     // Library Statistics
     Q_PROPERTY(int totalAlbums READ totalAlbums NOTIFY libraryStatsChanged)
     Q_PROPERTY(int totalTracks READ totalTracks NOTIFY libraryStatsChanged)
@@ -74,9 +86,16 @@ class QtBridge : public QObject {
     Q_PROPERTY(int selectedAlbumTrackCount READ selectedAlbumTrackCount NOTIFY selectedAlbumChanged)
     Q_PROPERTY(QString selectedAlbumArtHash READ selectedAlbumArtHash NOTIFY selectedAlbumChanged)
 
+    // Settings
+    Q_PROPERTY(QStringList monitoredFolders READ monitoredFolders NOTIFY settingsChanged)
+    Q_PROPERTY(QString doubleClickAction READ doubleClickAction WRITE setDoubleClickAction NOTIFY settingsChanged)
+    Q_PROPERTY(QString queueAutoFillMode READ queueAutoFillMode WRITE setQueueAutoFillMode NOTIFY settingsChanged)
+    Q_PROPERTY(bool autoScanOnStartup READ autoScanOnStartup WRITE setAutoScanOnStartup NOTIFY settingsChanged)
+
 public:
     explicit QtBridge(core::PlayerService& player, 
                       core::LibraryService& library, 
+                      adapters::ThemeLoader* themeLoader = nullptr,
                       QObject* parent = nullptr);
     ~QtBridge() override = default;
 
@@ -84,6 +103,7 @@ public:
     [[nodiscard]] TrackListModel* trackModel() const { return m_trackModel; }
     [[nodiscard]] TrackListModel* albumDetailTrackModel() const { return m_albumDetailTrackModel; }
     [[nodiscard]] TrackListModel* queueTrackModel() const { return m_queueTrackModel; }
+    [[nodiscard]] adapters::ThemeLoader* theme() const { return m_themeLoader; }
 
     [[nodiscard]] QString currentTrackTitle() const { return m_currentTrackTitle; }
     [[nodiscard]] QString currentArtist() const { return m_currentArtist; }
@@ -108,6 +128,12 @@ public:
     [[nodiscard]] float volume() const { return m_volume; }
     [[nodiscard]] bool isMuted() const { return m_isMuted; }
 
+    [[nodiscard]] int repeatMode() const;
+    [[nodiscard]] int shuffleMode() const;
+    [[nodiscard]] int queueRemainingCount() const;
+    [[nodiscard]] QString queueRemainingDurationStr() const;
+    [[nodiscard]] int upNextCount() const;
+
     [[nodiscard]] int totalAlbums() const;
     [[nodiscard]] int totalTracks() const;
     [[nodiscard]] QString totalDurationStr() const;
@@ -129,6 +155,11 @@ public:
     [[nodiscard]] int selectedAlbumTrackCount() const { return m_selectedAlbumTrackCount; }
     [[nodiscard]] QString selectedAlbumArtHash() const { return m_selectedAlbumArtHash; }
 
+    [[nodiscard]] QStringList monitoredFolders() const { return m_monitoredFolders; }
+    [[nodiscard]] QString doubleClickAction() const { return m_doubleClickAction; }
+    [[nodiscard]] QString queueAutoFillMode() const { return m_queueAutoFillMode; }
+    [[nodiscard]] bool autoScanOnStartup() const { return m_autoScanOnStartup; }
+
     // QML-invokable actions
     Q_INVOKABLE void scanDirectory(const QString& folderPath);
     Q_INVOKABLE void purgeMissingTracks();
@@ -145,6 +176,26 @@ public:
     Q_INVOKABLE void playTrackFromDetail(int index);
     Q_INVOKABLE void playQueueTrack(int index);
     Q_INVOKABLE void queueTrack(const QString& trackId);
+
+    // Queue operations
+    Q_INVOKABLE void playNow(const QString& trackId);
+    Q_INVOKABLE void playNext(const QString& trackId);
+    Q_INVOKABLE void queueLast(const QString& trackId);
+    Q_INVOKABLE void playAlbumNow(const QString& albumTitle, const QString& albumArtist);
+    Q_INVOKABLE void playAlbumNext(const QString& albumTitle, const QString& albumArtist);
+    Q_INVOKABLE void queueAlbumLast(const QString& albumTitle, const QString& albumArtist);
+    Q_INVOKABLE void removeFromQueue(int index);
+    Q_INVOKABLE void moveQueueItem(int fromIndex, int toIndex);
+    Q_INVOKABLE void clearQueue();
+    Q_INVOKABLE void shuffleRemainingQueue();
+
+    // Mode toggles
+    Q_INVOKABLE void setRepeatMode(int mode);
+    Q_INVOKABLE void cycleRepeatMode();
+    Q_INVOKABLE void setShuffleMode(int mode);
+    Q_INVOKABLE void cycleShuffleMode();
+
+    // Transport controls
     Q_INVOKABLE void togglePlayPause();
     Q_INVOKABLE void stop();
     Q_INVOKABLE void nextTrack();
@@ -155,6 +206,19 @@ public:
     Q_INVOKABLE void playAll();
     Q_INVOKABLE void shuffleAll();
 
+    // Utilities
+    Q_INVOKABLE void showInFileManager(const QString& filePath);
+    Q_INVOKABLE void copyToClipboard(const QString& text);
+
+    // Settings
+    Q_INVOKABLE void addMonitoredFolder(const QString& folderPath);
+    Q_INVOKABLE void removeMonitoredFolder(int index);
+    Q_INVOKABLE void rescanAllMonitoredFolders();
+    Q_INVOKABLE void setDoubleClickAction(const QString& action);
+    Q_INVOKABLE void setQueueAutoFillMode(const QString& mode);
+    Q_INVOKABLE void setAutoScanOnStartup(bool enable);
+    Q_INVOKABLE void exportDatabaseBackup(const QString& targetFilePath);
+
 signals:
     void playbackChanged();
     void positionChanged();
@@ -163,16 +227,23 @@ signals:
     void scanningChanged();
     void selectedAlbumChanged();
     void scanFinished(int count);
+    void playbackModeChanged();
+    void queueChanged();
+    void settingsChanged();
 
 private:
     void setupPositionTimer();
     void updatePlaybackState(const core::Track& track);
     void refreshLibraryStats();
+    void syncQueueModel();
+    void loadSettings();
+    void saveSettings();
     static QString formatTime(qint64 ms);
     static QString formatBytes(uint64_t bytes);
 
     core::PlayerService& m_player;
     core::LibraryService& m_library;
+    adapters::ThemeLoader* m_themeLoader{nullptr};
 
     AlbumListModel* m_albumModel{nullptr};
     TrackListModel* m_trackModel{nullptr};
@@ -223,7 +294,11 @@ private:
     int m_selectedAlbumTrackCount{0};
     QString m_selectedAlbumArtHash;
 
+    // Settings
+    QStringList m_monitoredFolders;
+    QString m_doubleClickAction{"Play Now"};
+    QString m_queueAutoFillMode{"Loop Album"};
+    bool m_autoScanOnStartup{false};
+
     QTimer* m_positionTimer{nullptr};
-    std::vector<core::Track> m_currentPlaylist;
-    int m_currentPlaylistIndex{0};
 };

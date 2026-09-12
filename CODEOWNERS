@@ -1,0 +1,20 @@
+# Parakeet Code Owners
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo
+* @ShamalLakshan
+
+# Core domain logic
+/core/ @ShamalLakshan
+
+# Adapters and UI
+/adapters/ @ShamalLakshan
+/app/ @ShamalLakshan
+
+# SDK and Plugins
+/sdk/ @ShamalLakshan
+/plugins/ @ShamalLakshan
+
+# Documentation and Tests
+/docs/ @ShamalLakshan
+/tests/ @ShamalLakshan

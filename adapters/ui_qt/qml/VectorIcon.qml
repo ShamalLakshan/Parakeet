@@ -5,8 +5,8 @@ Canvas {
     width: 16
     height: 16
 
-    property string name: "play"
-    property color color: "#e0e0e0"
+    property string name: "music"
+    property color color: Theme.textSecondary
 
     onNameChanged: requestPaint()
     onColorChanged: requestPaint()
@@ -256,6 +256,83 @@ Canvas {
             ctx.fillRect(w * 0.18, h * 0.35, w * 0.14, h * 0.14);
             ctx.fillRect(w * 0.43, h * 0.55, w * 0.14, h * 0.14);
             ctx.fillRect(w * 0.68, h * 0.25, w * 0.14, h * 0.14);
+        } else if (name === "repeat_one") {
+            ctx.beginPath();
+            ctx.arc(w * 0.5, h * 0.5, w * 0.34, -0.3, Math.PI + 0.3, false);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(w * 0.5, h * 0.5, w * 0.34, Math.PI - 0.3, 0.3, false);
+            ctx.stroke();
+            // arrows
+            ctx.beginPath();
+            ctx.moveTo(w * 0.76, h * 0.35);
+            ctx.lineTo(w * 0.88, h * 0.48);
+            ctx.lineTo(w * 0.64, h * 0.48);
+            ctx.fill();
+            // numeral 1 in center
+            ctx.beginPath();
+            ctx.moveTo(w * 0.44, h * 0.42);
+            ctx.lineTo(w * 0.50, h * 0.36);
+            ctx.lineTo(w * 0.50, h * 0.65);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(w * 0.42, h * 0.65);
+            ctx.lineTo(w * 0.58, h * 0.65);
+            ctx.stroke();
+        } else if (name === "more_vert") {
+            var r = Math.max(1.2, w * 0.08);
+            ctx.beginPath(); ctx.arc(w * 0.5, h * 0.25, r, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(w * 0.5, h * 0.5, r, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(w * 0.5, h * 0.75, r, 0, Math.PI * 2); ctx.fill();
+        } else if (name === "settings") {
+            ctx.beginPath();
+            ctx.arc(w * 0.5, h * 0.5, w * 0.22, 0, Math.PI * 2);
+            ctx.stroke();
+            for (var i = 0; i < 8; i++) {
+                var angle = i * (Math.PI / 4);
+                var cos = Math.cos(angle);
+                var sin = Math.sin(angle);
+                ctx.beginPath();
+                ctx.moveTo(w * 0.5 + cos * w * 0.24, h * 0.5 + sin * h * 0.24);
+                ctx.lineTo(w * 0.5 + cos * w * 0.38, h * 0.5 + sin * h * 0.38);
+                ctx.stroke();
+            }
+        } else if (name === "copy") {
+            ctx.strokeRect(w * 0.2, h * 0.35, w * 0.45, h * 0.45);
+            ctx.beginPath();
+            ctx.moveTo(w * 0.35, h * 0.35);
+            ctx.lineTo(w * 0.35, h * 0.2);
+            ctx.lineTo(w * 0.8, h * 0.2);
+            ctx.lineTo(w * 0.8, h * 0.65);
+            ctx.lineTo(w * 0.65, h * 0.65);
+            ctx.stroke();
+        } else if (name === "external") {
+            ctx.strokeRect(w * 0.18, h * 0.32, w * 0.5, h * 0.5);
+            ctx.beginPath();
+            ctx.moveTo(w * 0.48, h * 0.48);
+            ctx.lineTo(w * 0.82, h * 0.18);
+            ctx.moveTo(w * 0.6, h * 0.18);
+            ctx.lineTo(w * 0.82, h * 0.18);
+            ctx.lineTo(w * 0.82, h * 0.4);
+            ctx.stroke();
+        } else if (name === "check") {
+            ctx.beginPath();
+            ctx.moveTo(w * 0.22, h * 0.52);
+            ctx.lineTo(w * 0.44, h * 0.74);
+            ctx.lineTo(w * 0.82, h * 0.26);
+            ctx.stroke();
+        } else if (name === "arrow_up") {
+            ctx.beginPath();
+            ctx.moveTo(w * 0.25, h * 0.6);
+            ctx.lineTo(w * 0.5, h * 0.3);
+            ctx.lineTo(w * 0.75, h * 0.6);
+            ctx.stroke();
+        } else if (name === "arrow_down") {
+            ctx.beginPath();
+            ctx.moveTo(w * 0.25, h * 0.4);
+            ctx.lineTo(w * 0.5, h * 0.7);
+            ctx.lineTo(w * 0.75, h * 0.4);
+            ctx.stroke();
         } else if (name === "info") {
             ctx.beginPath();
             ctx.arc(w * 0.5, h * 0.5, w * 0.36, 0, Math.PI * 2);

@@ -45,7 +45,7 @@ struct Album {
     }
 
     /**
-     * @brief Formats audiophile summary line for UI cards.
+     * @brief Formats audio quality summary for UI cards.
      */
     [[nodiscard]] std::string audiophileSummary() const {
         std::string summary = primaryCodec;

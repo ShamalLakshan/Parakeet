@@ -13,6 +13,7 @@ void PlayerService::setAudioEngine(std::shared_ptr<IAudioEnginePort> audioEngine
 
 void PlayerService::play(const Track& track) {
     m_currentTrack = track;
+    m_queueService.playNow(track);
     m_state = PlaybackState::Playing;
 
     if (m_audioEngine) {
@@ -30,9 +31,22 @@ void PlayerService::play(const Track& track) {
 
 void PlayerService::playQueue(const std::vector<Track>& tracks, size_t startIndex) {
     if (tracks.empty()) return;
-    m_queue = tracks;
-    m_queueIndex = (startIndex < tracks.size()) ? startIndex : 0;
-    play(m_queue[m_queueIndex]);
+    size_t idx = (startIndex < tracks.size()) ? startIndex : 0;
+    m_currentTrack = tracks[idx];
+    m_queueService.playNow(tracks[idx], tracks, idx);
+    m_state = PlaybackState::Playing;
+
+    if (m_audioEngine) {
+        m_audioEngine->load(m_currentTrack->filePath);
+        m_audioEngine->play();
+    }
+
+    if (m_trackChangedCallback) {
+        m_trackChangedCallback(*m_currentTrack);
+    }
+    if (m_stateChangedCallback) {
+        m_stateChangedCallback(m_state);
+    }
 }
 
 void PlayerService::pause() {
@@ -80,15 +94,41 @@ void PlayerService::stop() {
 }
 
 void PlayerService::next() {
-    if (m_queue.empty()) return;
-    m_queueIndex = (m_queueIndex + 1) % m_queue.size();
-    play(m_queue[m_queueIndex]);
+    auto nextTrackOpt = m_queueService.next();
+    if (nextTrackOpt.has_value()) {
+        m_currentTrack = *nextTrackOpt;
+        m_state = PlaybackState::Playing;
+        if (m_audioEngine) {
+            m_audioEngine->load(m_currentTrack->filePath);
+            m_audioEngine->play();
+        }
+        if (m_trackChangedCallback) {
+            m_trackChangedCallback(*m_currentTrack);
+        }
+        if (m_stateChangedCallback) {
+            m_stateChangedCallback(m_state);
+        }
+    } else {
+        stop();
+    }
 }
 
 void PlayerService::previous() {
-    if (m_queue.empty()) return;
-    m_queueIndex = (m_queueIndex + m_queue.size() - 1) % m_queue.size();
-    play(m_queue[m_queueIndex]);
+    auto prevTrackOpt = m_queueService.previous();
+    if (prevTrackOpt.has_value()) {
+        m_currentTrack = *prevTrackOpt;
+        m_state = PlaybackState::Playing;
+        if (m_audioEngine) {
+            m_audioEngine->load(m_currentTrack->filePath);
+            m_audioEngine->play();
+        }
+        if (m_trackChangedCallback) {
+            m_trackChangedCallback(*m_currentTrack);
+        }
+        if (m_stateChangedCallback) {
+            m_stateChangedCallback(m_state);
+        }
+    }
 }
 
 void PlayerService::seek(uint64_t positionMs) {
@@ -102,6 +142,50 @@ void PlayerService::setVolume(float volume) {
     if (m_audioEngine) {
         m_audioEngine->setVolume(m_volume);
     }
+}
+
+void PlayerService::playNext(const Track& track) {
+    m_queueService.playNext(track);
+}
+
+void PlayerService::playNext(const std::vector<Track>& tracks) {
+    m_queueService.playNext(tracks);
+}
+
+void PlayerService::queueLast(const Track& track) {
+    m_queueService.queueLast(track);
+}
+
+void PlayerService::queueLast(const std::vector<Track>& tracks) {
+    m_queueService.queueLast(tracks);
+}
+
+bool PlayerService::removeFromQueue(size_t index) {
+    return m_queueService.removeFromQueue(index);
+}
+
+bool PlayerService::moveQueueItem(size_t fromIndex, size_t toIndex) {
+    return m_queueService.moveQueueItem(fromIndex, toIndex);
+}
+
+void PlayerService::clearQueue() {
+    m_queueService.clearQueue();
+}
+
+void PlayerService::shuffleRemaining() {
+    m_queueService.shuffleRemaining();
+}
+
+void PlayerService::setRepeatMode(RepeatMode mode) {
+    m_queueService.setRepeatMode(mode);
+}
+
+void PlayerService::cycleRepeatMode() {
+    m_queueService.cycleRepeatMode();
+}
+
+void PlayerService::setShuffleMode(ShuffleMode mode) {
+    m_queueService.setShuffleMode(mode);
 }
 
 uint64_t PlayerService::getPositionMs() const {

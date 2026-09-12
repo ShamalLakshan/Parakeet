@@ -28,7 +28,7 @@ public:
     size_t scanDirectory(const std::string& directoryPath, 
                          std::function<void(size_t scanned, size_t total)> progressCallback = nullptr);
     
-    /** @brief Seeds demo audiophile tracks (deprecated, no-op). */
+    /** @brief Seeds demo tracks (deprecated, no-op). */
     void seedSampleAudiophileLibrary();
 
     /** @brief Removes any tracks from the database whose files no longer exist on disk. */

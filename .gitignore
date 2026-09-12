@@ -3,7 +3,6 @@ build/
 bin/
 lib/
 out/
-docs/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
@@ -43,3 +42,9 @@ ui_*.h
 # OS-specific files
 .DS_Store
 Thumbs.db
+
+# LLM files
+GEMINI.md
+CLAUDE.md
+AGENTS.md
+

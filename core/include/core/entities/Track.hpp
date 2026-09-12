@@ -7,7 +7,7 @@
 namespace core {
 
 /**
- * @brief Represents a single audio track with audiophile metadata.
+ * @brief Represents a single audio track.
  */
 struct Track {
     std::string id;

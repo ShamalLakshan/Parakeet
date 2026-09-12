@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://parakeet-audio.org/schemas/theme-v1.json",
+  "title": "ParakeetTheme",
+  "description": "JSON schema for Parakeet Audiophile Music Player visual themes",
+  "type": "object",
+  "required": [
+    "meta",
+    "colors",
+    "typography",
+    "metrics"
+  ],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["name", "author", "version", "apiVersion"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$",
+          "description": "Unique machine-readable identifier for the theme"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable display name of the theme"
+        },
+        "author": {
+          "type": "string",
+          "description": "Theme author or organization"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+(\\.\\d+)?$",
+          "description": "Semantic version of the theme (e.g. 1.0.0)"
+        },
+        "apiVersion": {
+          "type": "string",
+          "description": "Target Parakeet theme API version (e.g. 0.1-unstable, 1.0)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional summary of theme aesthetic and purpose"
+        }
+      }
+    },
+    "colors": {
+      "type": "object",
+      "required": [
+        "background",
+        "surface",
+        "surfaceElevated",
+        "panelBorder",
+        "accent",
+        "accentHover",
+        "textPrimary",
+        "textSecondary",
+        "textMuted",
+        "selection",
+        "error",
+        "warning",
+        "success"
+      ],
+      "properties": {
+        "background": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "surface": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "surfaceElevated": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "panelBorder": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "accentHover": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "textPrimary": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "textSecondary": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "textMuted": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "selection": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "error": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "warning": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" },
+        "success": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$" }
+      }
+    },
+    "typography": {
+      "type": "object",
+      "required": [
+        "fontFamily",
+        "fontSizeSmall",
+        "fontSizeBase",
+        "fontSizeLarge",
+        "fontSizeTitle",
+        "fontWeightScale",
+        "lineHeightScale"
+      ],
+      "properties": {
+        "fontFamily": { "type": "string" },
+        "fontSizeSmall": { "type": "number", "minimum": 6, "maximum": 20 },
+        "fontSizeBase": { "type": "number", "minimum": 8, "maximum": 24 },
+        "fontSizeLarge": { "type": "number", "minimum": 10, "maximum": 32 },
+        "fontSizeTitle": { "type": "number", "minimum": 12, "maximum": 48 },
+        "fontWeightScale": { "type": "number", "minimum": 0.5, "maximum": 2.0 },
+        "lineHeightScale": { "type": "number", "minimum": 0.8, "maximum": 2.5 }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "required": [
+        "spacingSmall",
+        "spacingMedium",
+        "spacingLarge",
+        "cornerRadiusSmall",
+        "cornerRadiusMedium",
+        "panelPadding"
+      ],
+      "properties": {
+        "spacingSmall": { "type": "number", "minimum": 0, "maximum": 32 },
+        "spacingMedium": { "type": "number", "minimum": 0, "maximum": 48 },
+        "spacingLarge": { "type": "number", "minimum": 0, "maximum": 64 },
+        "cornerRadiusSmall": { "type": "number", "minimum": 0, "maximum": 16 },
+        "cornerRadiusMedium": { "type": "number", "minimum": 0, "maximum": 32 },
+        "panelPadding": { "type": "number", "minimum": 0, "maximum": 64 }
+      }
+    },
+    "icons": {
+      "type": "object",
+      "properties": {
+        "overridesDir": {
+          "type": "string",
+          "description": "Relative directory containing custom SVG/vector icon overrides"
+        }
+      }
+    }
+  }
+}

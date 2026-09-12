@@ -9,6 +9,11 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+enable_testing()
+
 add_subdirectory(core)
 add_subdirectory(adapters)
 add_subdirectory(app)
+add_subdirectory(sdk)
+add_subdirectory(plugins)
+add_subdirectory(tests)

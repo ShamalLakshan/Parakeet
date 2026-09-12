@@ -1,5 +1,12 @@
 #include "QtBridge.hpp"
 #include <QUrl>
+#include <QFileInfo>
+#include <QDir>
+#include <QDesktopServices>
+#include <QGuiApplication>
+#include <QClipboard>
+#include <QSettings>
+#include <QStandardPaths>
 #include <algorithm>
 #include <random>
 #include <set>
@@ -7,10 +14,11 @@
 
 QtBridge::QtBridge(core::PlayerService& player, 
                    core::LibraryService& library, 
+                   adapters::ThemeLoader* themeLoader,
                    QObject* parent)
-    : QObject(parent), m_player(player), m_library(library) {
+    : QObject(parent), m_player(player), m_library(library), m_themeLoader(themeLoader) {
     
-    // Purge any dead/fake paths on startup
+    // Remove missing tracks on startup
     m_library.purgeNonExistentTracks();
 
     m_albumModel = new AlbumListModel(&m_library.getDatabasePort(), this);
@@ -18,13 +26,41 @@ QtBridge::QtBridge(core::PlayerService& player,
     m_albumDetailTrackModel = new TrackListModel(&m_library.getDatabasePort(), this);
     m_queueTrackModel = new TrackListModel(&m_library.getDatabasePort(), this);
 
+    loadSettings();
     refreshLibraryStats();
     setupPositionTimer();
+
+    if (m_autoScanOnStartup && !m_monitoredFolders.isEmpty()) {
+        rescanAllMonitoredFolders();
+    }
+}
+
+void QtBridge::loadSettings() {
+    QSettings s("ParakeetAudio", "Parakeet");
+    m_monitoredFolders = s.value("library/monitoredFolders").toStringList();
+    m_doubleClickAction = s.value("playback/doubleClickAction", "Play Now").toString();
+    m_queueAutoFillMode = s.value("playback/queueAutoFillMode", "Loop Album").toString();
+    m_autoScanOnStartup = s.value("library/autoScanOnStartup", false).toBool();
+    int rMode = s.value("playback/repeatMode", 0).toInt();
+    int sMode = s.value("playback/shuffleMode", 0).toInt();
+    m_player.setRepeatMode(static_cast<core::RepeatMode>(rMode));
+    m_player.setShuffleMode(static_cast<core::ShuffleMode>(sMode));
+}
+
+void QtBridge::saveSettings() {
+    QSettings s("ParakeetAudio", "Parakeet");
+    s.setValue("library/monitoredFolders", m_monitoredFolders);
+    s.setValue("playback/doubleClickAction", m_doubleClickAction);
+    s.setValue("playback/queueAutoFillMode", m_queueAutoFillMode);
+    s.setValue("library/autoScanOnStartup", m_autoScanOnStartup);
+    s.setValue("playback/repeatMode", static_cast<int>(m_player.getRepeatMode()));
+    s.setValue("playback/shuffleMode", static_cast<int>(m_player.getShuffleMode()));
+    emit settingsChanged();
 }
 
 void QtBridge::setupPositionTimer() {
     m_positionTimer = new QTimer(this);
-    m_positionTimer->setInterval(250); // 4Hz smooth position update
+    m_positionTimer->setInterval(250);
     connect(m_positionTimer, &QTimer::timeout, this, [this]() {
         if (m_isPlaying) {
             uint64_t realPos = m_player.getPositionMs();
@@ -32,7 +68,7 @@ void QtBridge::setupPositionTimer() {
             m_positionStr = formatTime(m_positionMs);
             emit positionChanged();
 
-            // Duration check
+            // Check duration
             uint64_t realDur = m_player.getDurationMs();
             if (realDur > 0 && static_cast<qint64>(realDur) != m_durationMs) {
                 m_durationMs = static_cast<qint64>(realDur);
@@ -67,6 +103,26 @@ QString QtBridge::currentArtUrl() const {
         return "image://albumart/default";
     }
     return "image://albumart/" + m_currentArtHash;
+}
+
+int QtBridge::repeatMode() const {
+    return static_cast<int>(m_player.getRepeatMode());
+}
+
+int QtBridge::shuffleMode() const {
+    return static_cast<int>(m_player.getShuffleMode());
+}
+
+int QtBridge::queueRemainingCount() const {
+    return static_cast<int>(m_player.getQueueService().getRemainingCount());
+}
+
+QString QtBridge::queueRemainingDurationStr() const {
+    return formatTime(static_cast<qint64>(m_player.getQueueService().getRemainingDurationMs()));
+}
+
+int QtBridge::upNextCount() const {
+    return static_cast<int>(m_player.getQueueService().getUpNext().size());
 }
 
 int QtBridge::totalAlbums() const {
@@ -116,6 +172,12 @@ void QtBridge::refreshLibraryStats() {
     emit libraryStatsChanged();
 }
 
+void QtBridge::syncQueueModel() {
+    auto upcoming = m_player.getQueueService().getUpcomingQueue();
+    m_queueTrackModel->setTracks(upcoming);
+    emit queueChanged();
+}
+
 void QtBridge::scanDirectory(const QString& folderPath) {
     if (m_isScanning) return;
 
@@ -161,17 +223,19 @@ void QtBridge::purgeMissingTracks() {
     m_albumModel->reload();
     m_trackModel->loadAllTracks();
     refreshLibraryStats();
+    syncQueueModel();
     m_scanStatusText = QString("Purged %1 non-existent tracks").arg(count);
     emit scanningChanged();
 }
 
 void QtBridge::clearLibrary() {
     m_library.clearLibrary();
-    m_currentPlaylist.clear();
+    m_player.clearQueue();
     m_queueTrackModel->setTracks({});
     m_albumModel->reload();
     m_trackModel->loadAllTracks();
     refreshLibraryStats();
+    syncQueueModel();
     m_scanStatusText = "Library cleared";
     emit scanningChanged();
 }
@@ -242,70 +306,138 @@ void QtBridge::openAlbumDetails(const QString& albumTitle, const QString& albumA
 }
 
 void QtBridge::playAlbum(const QString& albumTitle, const QString& albumArtist) {
-    auto tracks = m_library.getTracksForAlbum(albumTitle.toStdString(), albumArtist.toStdString());
-    if (!tracks.empty()) {
-        m_currentPlaylist = tracks;
-        m_currentPlaylistIndex = 0;
-        m_queueTrackModel->setTracks(m_currentPlaylist);
-        updatePlaybackState(m_currentPlaylist[0]);
-    }
+    playAlbumNow(albumTitle, albumArtist);
 }
 
 void QtBridge::playTrack(const QString& trackId) {
+    playNow(trackId);
+}
+
+void QtBridge::playNow(const QString& trackId) {
     auto trackOpt = m_library.getTrackById(trackId.toStdString());
     if (trackOpt) {
-        m_currentPlaylist = { *trackOpt };
-        m_currentPlaylistIndex = 0;
-        m_queueTrackModel->setTracks(m_currentPlaylist);
+        // Context tracks from current view
+        auto allTracks = m_library.getTracks();
+        size_t idx = 0;
+        for (size_t i = 0; i < allTracks.size(); ++i) {
+            if (allTracks[i].id == trackId.toStdString()) {
+                idx = i;
+                break;
+            }
+        }
+        m_player.playQueue(allTracks, idx);
         updatePlaybackState(*trackOpt);
+        syncQueueModel();
     }
+}
+
+void QtBridge::playNext(const QString& trackId) {
+    auto trackOpt = m_library.getTrackById(trackId.toStdString());
+    if (trackOpt) {
+        m_player.playNext(*trackOpt);
+        syncQueueModel();
+    }
+}
+
+void QtBridge::queueLast(const QString& trackId) {
+    auto trackOpt = m_library.getTrackById(trackId.toStdString());
+    if (trackOpt) {
+        m_player.queueLast(*trackOpt);
+        syncQueueModel();
+    }
+}
+
+void QtBridge::playAlbumNow(const QString& albumTitle, const QString& albumArtist) {
+    auto tracks = m_library.getTracksForAlbum(albumTitle.toStdString(), albumArtist.toStdString());
+    if (!tracks.empty()) {
+        m_player.playQueue(tracks, 0);
+        updatePlaybackState(tracks[0]);
+        syncQueueModel();
+    }
+}
+
+void QtBridge::playAlbumNext(const QString& albumTitle, const QString& albumArtist) {
+    auto tracks = m_library.getTracksForAlbum(albumTitle.toStdString(), albumArtist.toStdString());
+    if (!tracks.empty()) {
+        m_player.playNext(tracks);
+        syncQueueModel();
+    }
+}
+
+void QtBridge::queueAlbumLast(const QString& albumTitle, const QString& albumArtist) {
+    auto tracks = m_library.getTracksForAlbum(albumTitle.toStdString(), albumArtist.toStdString());
+    if (!tracks.empty()) {
+        m_player.queueLast(tracks);
+        syncQueueModel();
+    }
+}
+
+void QtBridge::removeFromQueue(int index) {
+    if (index >= 0) {
+        m_player.removeFromQueue(static_cast<size_t>(index));
+        syncQueueModel();
+    }
+}
+
+void QtBridge::moveQueueItem(int fromIndex, int toIndex) {
+    if (fromIndex >= 0 && toIndex >= 0) {
+        m_player.moveQueueItem(static_cast<size_t>(fromIndex), static_cast<size_t>(toIndex));
+        syncQueueModel();
+    }
+}
+
+void QtBridge::clearQueue() {
+    m_player.clearQueue();
+    syncQueueModel();
+}
+
+void QtBridge::shuffleRemainingQueue() {
+    m_player.shuffleRemaining();
+    syncQueueModel();
 }
 
 void QtBridge::playTrackAtIndex(int index) {
     auto trackMap = m_trackModel->getTrackAt(index);
     if (!trackMap.isEmpty()) {
-        QString id = trackMap["id"].toString();
-        // Load all current tracks into playlist starting at index
-        m_currentPlaylist = m_library.getTracks();
-        m_currentPlaylistIndex = std::clamp(index, 0, static_cast<int>(m_currentPlaylist.size()) - 1);
-        m_queueTrackModel->setTracks(m_currentPlaylist);
-        if (!m_currentPlaylist.empty()) {
-            updatePlaybackState(m_currentPlaylist[static_cast<size_t>(m_currentPlaylistIndex)]);
+        auto all = m_library.getTracks();
+        size_t idx = std::clamp(static_cast<size_t>(index), size_t(0), all.empty() ? 0 : all.size() - 1);
+        m_player.playQueue(all, idx);
+        if (!all.empty()) {
+            updatePlaybackState(all[idx]);
         }
+        syncQueueModel();
     }
 }
 
 void QtBridge::playTrackFromDetail(int index) {
     auto trackMap = m_albumDetailTrackModel->getTrackAt(index);
     if (!trackMap.isEmpty()) {
-        QString id = trackMap["id"].toString();
         auto tracks = m_library.getTracksForAlbum(m_selectedAlbumTitle.toStdString(), m_selectedAlbumArtist.toStdString());
         if (!tracks.empty()) {
-            m_currentPlaylist = tracks;
-            m_currentPlaylistIndex = std::clamp(index, 0, static_cast<int>(m_currentPlaylist.size()) - 1);
-            m_queueTrackModel->setTracks(m_currentPlaylist);
-            updatePlaybackState(m_currentPlaylist[static_cast<size_t>(m_currentPlaylistIndex)]);
+            size_t idx = std::clamp(static_cast<size_t>(index), size_t(0), tracks.size() - 1);
+            m_player.playQueue(tracks, idx);
+            updatePlaybackState(tracks[idx]);
+            syncQueueModel();
         }
     }
 }
 
 void QtBridge::playQueueTrack(int index) {
-    if (index >= 0 && index < static_cast<int>(m_currentPlaylist.size())) {
-        m_currentPlaylistIndex = index;
-        updatePlaybackState(m_currentPlaylist[static_cast<size_t>(m_currentPlaylistIndex)]);
+    auto upcoming = m_player.getQueueService().getUpcomingQueue();
+    if (index >= 0 && index < static_cast<int>(upcoming.size())) {
+        m_player.play(upcoming[static_cast<size_t>(index)]);
+        updatePlaybackState(upcoming[static_cast<size_t>(index)]);
+        // Remove current track from upcoming list
+        m_player.removeFromQueue(static_cast<size_t>(index));
+        syncQueueModel();
     }
 }
 
 void QtBridge::queueTrack(const QString& trackId) {
-    auto trackOpt = m_library.getTrackById(trackId.toStdString());
-    if (trackOpt) {
-        m_currentPlaylist.push_back(*trackOpt);
-        m_queueTrackModel->setTracks(m_currentPlaylist);
-    }
+    queueLast(trackId);
 }
 
 void QtBridge::updatePlaybackState(const core::Track& track) {
-    m_player.play(track);
     m_isPlaying = true;
 
     m_currentTrackTitle = QString::fromStdString(track.title);
@@ -321,7 +453,7 @@ void QtBridge::updatePlaybackState(const core::Track& track) {
     m_currentBitDepth = static_cast<int>(track.bitDepth);
     m_currentChannels = static_cast<int>(track.channels);
 
-    // Audio specs formatting
+    // Audio specs
     QString spec = m_currentCodec;
     if (track.sampleRate > 0) {
         double khz = static_cast<double>(track.sampleRate) / 1000.0;
@@ -347,6 +479,7 @@ void QtBridge::updatePlaybackState(const core::Track& track) {
     m_positionTimer->start();
     emit playbackChanged();
     emit positionChanged();
+    syncQueueModel();
 }
 
 void QtBridge::togglePlayPause() {
@@ -371,15 +504,21 @@ void QtBridge::stop() {
 }
 
 void QtBridge::nextTrack() {
-    if (m_currentPlaylist.empty()) return;
-    m_currentPlaylistIndex = (m_currentPlaylistIndex + 1) % static_cast<int>(m_currentPlaylist.size());
-    updatePlaybackState(m_currentPlaylist[static_cast<size_t>(m_currentPlaylistIndex)]);
+    m_player.next();
+    auto current = m_player.getCurrentTrack();
+    if (current.has_value()) {
+        updatePlaybackState(*current);
+    } else {
+        stop();
+    }
 }
 
 void QtBridge::previousTrack() {
-    if (m_currentPlaylist.empty()) return;
-    m_currentPlaylistIndex = (m_currentPlaylistIndex - 1 + static_cast<int>(m_currentPlaylist.size())) % static_cast<int>(m_currentPlaylist.size());
-    updatePlaybackState(m_currentPlaylist[static_cast<size_t>(m_currentPlaylistIndex)]);
+    m_player.previous();
+    auto current = m_player.getCurrentTrack();
+    if (current.has_value()) {
+        updatePlaybackState(*current);
+    }
 }
 
 void QtBridge::seek(qint64 posMs) {
@@ -405,23 +544,111 @@ void QtBridge::toggleMute() {
     }
 }
 
+void QtBridge::setRepeatMode(int mode) {
+    m_player.setRepeatMode(static_cast<core::RepeatMode>(mode));
+    saveSettings();
+    emit playbackModeChanged();
+}
+
+void QtBridge::cycleRepeatMode() {
+    m_player.cycleRepeatMode();
+    saveSettings();
+    emit playbackModeChanged();
+}
+
+void QtBridge::setShuffleMode(int mode) {
+    m_player.setShuffleMode(static_cast<core::ShuffleMode>(mode));
+    saveSettings();
+    syncQueueModel();
+    emit playbackModeChanged();
+}
+
+void QtBridge::cycleShuffleMode() {
+    int next = (shuffleMode() + 1) % 3;
+    setShuffleMode(next);
+}
+
 void QtBridge::playAll() {
-    m_currentPlaylist = m_library.getTracks();
-    if (!m_currentPlaylist.empty()) {
-        m_currentPlaylistIndex = 0;
-        m_queueTrackModel->setTracks(m_currentPlaylist);
-        updatePlaybackState(m_currentPlaylist[0]);
+    auto all = m_library.getTracks();
+    if (!all.empty()) {
+        m_player.playQueue(all, 0);
+        updatePlaybackState(all[0]);
+        syncQueueModel();
     }
 }
 
 void QtBridge::shuffleAll() {
-    m_currentPlaylist = m_library.getTracks();
-    if (!m_currentPlaylist.empty()) {
+    auto all = m_library.getTracks();
+    if (!all.empty()) {
         std::random_device rd;
         std::mt19937 g(rd());
-        std::shuffle(m_currentPlaylist.begin(), m_currentPlaylist.end(), g);
-        m_currentPlaylistIndex = 0;
-        m_queueTrackModel->setTracks(m_currentPlaylist);
-        updatePlaybackState(m_currentPlaylist[0]);
+        std::shuffle(all.begin(), all.end(), g);
+        m_player.playQueue(all, 0);
+        updatePlaybackState(all[0]);
+        syncQueueModel();
     }
+}
+
+void QtBridge::showInFileManager(const QString& filePath) {
+    QFileInfo fi(filePath);
+    if (fi.exists()) {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(fi.absolutePath()));
+    }
+}
+
+void QtBridge::copyToClipboard(const QString& text) {
+    QClipboard* cb = QGuiApplication::clipboard();
+    if (cb) {
+        cb->setText(text);
+    }
+}
+
+void QtBridge::addMonitoredFolder(const QString& folderPath) {
+    QString local = folderPath;
+    QUrl u = QUrl::fromUserInput(folderPath);
+    if (u.isLocalFile()) local = u.toLocalFile();
+    else if (local.startsWith("file://")) local = local.mid(7);
+
+    if (!local.isEmpty() && !m_monitoredFolders.contains(local)) {
+        m_monitoredFolders.append(local);
+        saveSettings();
+        scanDirectory(local);
+    }
+}
+
+void QtBridge::removeMonitoredFolder(int index) {
+    if (index >= 0 && index < m_monitoredFolders.size()) {
+        m_monitoredFolders.removeAt(index);
+        saveSettings();
+    }
+}
+
+void QtBridge::rescanAllMonitoredFolders() {
+    for (const QString& folder : m_monitoredFolders) {
+        scanDirectory(folder);
+    }
+}
+
+void QtBridge::setDoubleClickAction(const QString& action) {
+    m_doubleClickAction = action;
+    saveSettings();
+}
+
+void QtBridge::setQueueAutoFillMode(const QString& mode) {
+    m_queueAutoFillMode = mode;
+    saveSettings();
+}
+
+void QtBridge::setAutoScanOnStartup(bool enable) {
+    m_autoScanOnStartup = enable;
+    saveSettings();
+}
+
+void QtBridge::exportDatabaseBackup(const QString& targetFilePath) {
+    QString src = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/parakeet_library.db";
+    QString dest = targetFilePath;
+    QUrl u = QUrl::fromUserInput(targetFilePath);
+    if (u.isLocalFile()) dest = u.toLocalFile();
+    if (QFile::exists(dest)) QFile::remove(dest);
+    QFile::copy(src, dest);
 }

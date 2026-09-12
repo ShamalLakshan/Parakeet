@@ -11,6 +11,7 @@
 #include "metadata/TagLibMetadataAdapter.hpp"
 #include "audio/BitPerfectAudioAdapter.hpp"
 #include "providers/AlbumArtImageProvider.hpp"
+#include "theming/ThemeLoader.hpp"
 #include "QtBridge.hpp"
 
 int main(int argc, char *argv[]) {
@@ -18,7 +19,7 @@ int main(int argc, char *argv[]) {
     app.setOrganizationName("ParakeetAudio");
     app.setApplicationName("Parakeet");
 
-    // set up sqlite db in the app data folder
+    // SQLite database in app data folder
     QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(appDataDir);
     QString dbPath = appDataDir + "/parakeet_library.db";
@@ -26,27 +27,31 @@ int main(int argc, char *argv[]) {
     auto dbAdapter = std::make_unique<adapters::SqliteDatabaseAdapter>();
     dbAdapter->initialize(dbPath.toStdString());
 
-    // metadata parser and audio engine adapters
+    // Metadata and audio adapters
     auto metadataAdapter = std::make_unique<adapters::TagLibMetadataAdapter>();
     auto audioEngine = std::make_shared<adapters::BitPerfectAudioAdapter>();
     audioEngine->initialize(96000, 2);
 
-    // pure core services with zero qt dependencies
+    // Core services
     core::LibraryService libraryService(*dbAdapter, *metadataAdapter);
     core::PlayerService playerService(audioEngine);
 
-    // bridge connecting core to qml
-    QtBridge bridge(playerService, libraryService);
+    // Theming engine
+    auto themeLoader = std::make_unique<adapters::ThemeLoader>();
 
-    // automatic queue progression on track end
+    // Bridge connecting core to QML
+    QtBridge bridge(playerService, libraryService, themeLoader.get());
+
+    // Play next track when current one finishes
     audioEngine->setEndOfTrackCallback([&bridge]() {
         QMetaObject::invokeMethod(&bridge, "nextTrack", Qt::QueuedConnection);
     });
 
-    // qml engine and custom album art provider with persistent disk cache
+    // QML engine and album art provider
     QString coversDir = appDataDir + "/covers";
     QQmlApplicationEngine engine;
     engine.addImageProvider("albumart", new AlbumArtImageProvider(metadataAdapter.get(), dbAdapter.get(), coversDir));
+    engine.rootContext()->setContextProperty("Theme", themeLoader.get());
     engine.rootContext()->setContextProperty("bridge", &bridge);
     
     const QUrl url(QStringLiteral("qrc:/PlayerUI/ui_qt/qml/Main.qml"));
