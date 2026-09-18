@@ -5,6 +5,7 @@ pkg_check_modules(GTEST REQUIRED gtest gtest_main)
 add_executable(parakeet_tests
     test_queue_service.cpp
     test_theme_loader.cpp
+    test_settings.cpp
 )
 
 target_include_directories(parakeet_tests PRIVATE
