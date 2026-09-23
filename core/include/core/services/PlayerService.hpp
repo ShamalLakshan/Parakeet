@@ -3,88 +3,106 @@
 #include "core/entities/Track.hpp"
 #include "core/ports/IAudioEnginePort.hpp"
 #include "core/services/QueueService.hpp"
-#include <vector>
-#include <optional>
-#include <memory>
 #include <functional>
+#include <memory>
+#include <optional>
+#include <vector>
 
 namespace core {
 
 /**
  * @brief Playback states.
  */
-enum class PlaybackState {
-    Stopped,
-    Playing,
-    Paused
-};
+enum class PlaybackState { Stopped, Playing, Paused };
 
 /**
  * @brief Manages playback, audio engine state, and the queue.
  */
 class PlayerService {
 public:
-    explicit PlayerService(std::shared_ptr<IAudioEnginePort> audioEngine = nullptr);
-    ~PlayerService() = default;
+  explicit PlayerService(
+      std::shared_ptr<IAudioEnginePort> audioEngine = nullptr);
+  ~PlayerService() = default;
 
-    /** @brief Sets the active audio engine. */
-    void setAudioEngine(std::shared_ptr<IAudioEnginePort> audioEngine);
+  /** @brief Sets the active audio engine. */
+  void setAudioEngine(std::shared_ptr<IAudioEnginePort> audioEngine);
 
-    /** @brief Plays a single track directly. */
-    void play(const Track& track);
+  /** @brief Plays a single track directly. */
+  void play(const Track &track);
 
-    /** @brief Loads tracks into queue and starts playback at the given index. */
-    void playQueue(const std::vector<Track>& tracks, size_t startIndex = 0);
+  /** @brief Loads tracks into queue and starts playback at the given index. */
+  void playQueue(const std::vector<Track> &tracks, size_t startIndex = 0);
 
-    void pause();
-    void resume();
-    void togglePlayPause();
-    void stop();
-    void next();
-    void previous();
-    void seek(uint64_t positionMs);
-    void setVolume(float volume);
+  void pause();
+  void resume();
+  void togglePlayPause();
+  void stop();
+  void next();
+  void previous();
+  void seek(uint64_t positionMs);
+  void setVolume(float volume);
 
-    // Queue actions
-    void playNext(const Track& track);
-    void playNext(const std::vector<Track>& tracks);
-    void queueLast(const Track& track);
-    void queueLast(const std::vector<Track>& tracks);
-    bool removeFromQueue(size_t index);
-    bool moveQueueItem(size_t fromIndex, size_t toIndex);
-    void clearQueue();
-    void shuffleRemaining();
+  // Queue actions
+  void playNext(const Track &track);
+  void playNext(const std::vector<Track> &tracks);
+  void queueLast(const Track &track);
+  void queueLast(const std::vector<Track> &tracks);
+  bool removeFromQueue(size_t index);
+  bool moveQueueItem(size_t fromIndex, size_t toIndex);
+  void clearQueue();
+  void shuffleRemaining();
+  void clearHistory() { m_queueService.clearHistory(); }
+  void setHistoryLimit(size_t limit) { m_queueService.setHistoryLimit(limit); }
+  [[nodiscard]] size_t getHistoryLimit() const {
+    return m_queueService.getHistoryLimit();
+  }
 
-    // Mode controls
-    void setRepeatMode(RepeatMode mode);
-    [[nodiscard]] RepeatMode getRepeatMode() const { return m_queueService.getRepeatMode(); }
-    void cycleRepeatMode();
+  // Mode controls
+  void setRepeatMode(RepeatMode mode);
+  [[nodiscard]] RepeatMode getRepeatMode() const {
+    return m_queueService.getRepeatMode();
+  }
+  void cycleRepeatMode();
 
-    void setShuffleMode(ShuffleMode mode);
-    [[nodiscard]] ShuffleMode getShuffleMode() const { return m_queueService.getShuffleMode(); }
+  void setShuffleMode(ShuffleMode mode);
+  [[nodiscard]] ShuffleMode getShuffleMode() const {
+    return m_queueService.getShuffleMode();
+  }
 
-    [[nodiscard]] PlaybackState getState() const { return m_state; }
-    [[nodiscard]] bool isPlaying() const { return m_state == PlaybackState::Playing; }
-    [[nodiscard]] std::optional<Track> getCurrentTrack() const { return m_currentTrack; }
-    [[nodiscard]] uint64_t getPositionMs() const;
-    [[nodiscard]] uint64_t getDurationMs() const;
-    [[nodiscard]] float getVolume() const { return m_volume; }
-    [[nodiscard]] std::vector<Track> getQueue() const { return m_queueService.getUpcomingQueue(); }
-    [[nodiscard]] QueueService& getQueueService() { return m_queueService; }
-    [[nodiscard]] const QueueService& getQueueService() const { return m_queueService; }
+  [[nodiscard]] PlaybackState getState() const { return m_state; }
+  [[nodiscard]] bool isPlaying() const {
+    return m_state == PlaybackState::Playing;
+  }
+  [[nodiscard]] std::optional<Track> getCurrentTrack() const {
+    return m_currentTrack;
+  }
+  [[nodiscard]] uint64_t getPositionMs() const;
+  [[nodiscard]] uint64_t getDurationMs() const;
+  [[nodiscard]] float getVolume() const { return m_volume; }
+  [[nodiscard]] std::vector<Track> getQueue() const {
+    return m_queueService.getUpcomingQueue();
+  }
+  [[nodiscard]] QueueService &getQueueService() { return m_queueService; }
+  [[nodiscard]] const QueueService &getQueueService() const {
+    return m_queueService;
+  }
 
-    void onTrackChanged(std::function<void(const Track&)> callback) { m_trackChangedCallback = callback; }
-    void onStateChanged(std::function<void(PlaybackState)> callback) { m_stateChangedCallback = callback; }
+  void onTrackChanged(std::function<void(const Track &)> callback) {
+    m_trackChangedCallback = callback;
+  }
+  void onStateChanged(std::function<void(PlaybackState)> callback) {
+    m_stateChangedCallback = callback;
+  }
 
 private:
-    std::shared_ptr<IAudioEnginePort> m_audioEngine;
-    QueueService m_queueService;
-    PlaybackState m_state{PlaybackState::Stopped};
-    std::optional<Track> m_currentTrack;
-    float m_volume{0.8f};
+  std::shared_ptr<IAudioEnginePort> m_audioEngine;
+  QueueService m_queueService;
+  PlaybackState m_state{PlaybackState::Stopped};
+  std::optional<Track> m_currentTrack;
+  float m_volume{0.8f};
 
-    std::function<void(const Track&)> m_trackChangedCallback;
-    std::function<void(PlaybackState)> m_stateChangedCallback;
+  std::function<void(const Track &)> m_trackChangedCallback;
+  std::function<void(PlaybackState)> m_stateChangedCallback;
 };
 
 } // namespace core

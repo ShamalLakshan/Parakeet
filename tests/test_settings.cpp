@@ -32,6 +32,7 @@ public:
     return std::nullopt;
   }
   bool clearLibrary() override { return true; }
+  bool optimizeDatabase() override { return true; }
   size_t getTrackCount() override { return 0; }
   size_t getAlbumCount() override { return 0; }
 };
@@ -182,4 +183,117 @@ TEST_F(SettingsTest, AudioSettingsGettersAndSetters) {
   EXPECT_EQ(bridge.ditherMode(), "High-Pass TPDF");
   bridge.setChannelProcessing("Mono Downmix");
   EXPECT_EQ(bridge.channelProcessing(), "Mono Downmix");
+}
+
+TEST_F(SettingsTest, PlaybackDSPSettingsGettersAndSetters) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Gapless & Crossfade
+  bridge.setGaplessPlayback(false);
+  EXPECT_FALSE(bridge.gaplessPlayback());
+  bridge.setGaplessPlayback(true);
+  EXPECT_TRUE(bridge.gaplessPlayback());
+
+  bridge.setCrossfadeEnabled(true);
+  EXPECT_TRUE(bridge.crossfadeEnabled());
+  bridge.setCrossfadeDurationSec(3.5);
+  EXPECT_DOUBLE_EQ(bridge.crossfadeDurationSec(), 3.5);
+  bridge.setCrossfadeCurve("Logarithmic Fade");
+  EXPECT_EQ(bridge.crossfadeCurve(), "Logarithmic Fade");
+
+  // ReplayGain
+  bridge.setReplayGainMode("Album Gain (Preserves Album Dynamics)");
+  EXPECT_EQ(bridge.replayGainMode(), "Album Gain (Preserves Album Dynamics)");
+  bridge.setReplayGainPreampDb(3);
+  EXPECT_EQ(bridge.replayGainPreampDb(), 3);
+  bridge.setReplayGainPreampWithoutGainDb(-3);
+  EXPECT_EQ(bridge.replayGainPreampWithoutGainDb(), -3);
+  bridge.setTruePeakLimiter(false);
+  EXPECT_FALSE(bridge.truePeakLimiter());
+
+  // Seek & Stop
+  bridge.setShortSeekStepSec(3);
+  EXPECT_EQ(bridge.shortSeekStepSec(), 3);
+  bridge.setLongSeekStepSec(45);
+  EXPECT_EQ(bridge.longSeekStepSec(), 45);
+  bridge.setStopAfterCurrentTrack(true);
+  EXPECT_TRUE(bridge.stopAfterCurrentTrack());
+}
+
+TEST_F(SettingsTest, QueueSettingsGettersAndSetters) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Click Actions
+  bridge.setDoubleClickAction("Play Next");
+  EXPECT_EQ(bridge.doubleClickAction(), "Play Next");
+  bridge.setMiddleClickAction("Play Now");
+  EXPECT_EQ(bridge.middleClickAction(), "Play Now");
+
+  // Queue End Behavior
+  bridge.setQueueAutoFillMode("Smart Autoplay (Similar Tracks)");
+  EXPECT_EQ(bridge.queueAutoFillMode(), "Smart Autoplay (Similar Tracks)");
+
+  // Shuffle Strategy
+  bridge.setShuffleMode(2);
+  EXPECT_EQ(bridge.shuffleMode(), 2);
+
+  // History
+  bridge.setHistoryRetentionLimit(500);
+  EXPECT_EQ(bridge.historyRetentionLimit(), 500);
+  EXPECT_EQ(player.getHistoryLimit(), 500);
+
+  bridge.clearPlaybackHistory();
+  EXPECT_TRUE(player.getQueueService().getHistory().empty());
+}
+
+TEST_F(SettingsTest, LibrarySettingsGettersAndSetters) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Monitored Folders & Watcher
+  bridge.setFilesystemWatcher(false);
+  EXPECT_FALSE(bridge.filesystemWatcher());
+  bridge.setAutoScanOnStartup(true);
+  EXPECT_TRUE(bridge.autoScanOnStartup());
+
+  // Format Filters
+  QStringList customFormats = {"FLAC", "DSD (DSF/DFF)", "OPUS"};
+  bridge.setFormatFilters(customFormats);
+  EXPECT_EQ(bridge.formatFilters(), customFormats);
+  EXPECT_TRUE(bridge.isFormatFilterEnabled("FLAC"));
+  EXPECT_FALSE(bridge.isFormatFilterEnabled("MP3"));
+
+  bridge.setFormatFilterEnabled("MP3", true);
+  EXPECT_TRUE(bridge.isFormatFilterEnabled("MP3"));
+  bridge.setFormatFilterEnabled("FLAC", false);
+  EXPECT_FALSE(bridge.isFormatFilterEnabled("FLAC"));
+
+  // Exclude Folders & Artwork Priority
+  bridge.setExcludeFolders(".*, temp, build");
+  EXPECT_EQ(bridge.excludeFolders(), ".*, temp, build");
+  bridge.setArtworkPriority("External Folder Art First");
+  EXPECT_EQ(bridge.artworkPriority(), "External Folder Art First");
+
+  // Database maintenance
+  bridge.optimizeDatabase();
 }

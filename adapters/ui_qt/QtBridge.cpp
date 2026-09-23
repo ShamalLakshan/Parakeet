@@ -57,16 +57,57 @@ QtBridge::QtBridge(core::PlayerService &player, core::LibraryService &library,
 
 void QtBridge::loadSettings() {
   QSettings s("ParakeetAudio", "Parakeet");
-  m_monitoredFolders = s.value("library/monitoredFolders").toStringList();
+
+  // Playback & DSP
+  m_gaplessPlayback = s.value("playback/gaplessPlayback", true).toBool();
+  m_crossfadeEnabled = s.value("playback/crossfadeEnabled", false).toBool();
+  m_crossfadeDurationSec =
+      s.value("playback/crossfadeDurationSec", 2.0).toReal();
+  m_crossfadeCurve =
+      s.value("playback/crossfadeCurve", "Equal Power (Constant Volume)")
+          .toString();
+  m_replayGainMode =
+      s.value("playback/replayGainMode", "Smart Gain (Auto Track/Album)")
+          .toString();
+  m_replayGainPreampDb = s.value("playback/replayGainPreampDb", 0).toInt();
+  m_replayGainPreampWithoutGainDb =
+      s.value("playback/replayGainPreampWithoutGainDb", -6).toInt();
+  m_truePeakLimiter = s.value("playback/truePeakLimiter", true).toBool();
+  m_shortSeekStepSec = s.value("playback/shortSeekStepSec", 5).toInt();
+  m_longSeekStepSec = s.value("playback/longSeekStepSec", 30).toInt();
+  m_stopAfterCurrentTrack =
+      s.value("playback/stopAfterCurrentTrack", false).toBool();
+
+  // Queue & Ergonomics
   m_doubleClickAction =
       s.value("playback/doubleClickAction", "Play Now").toString();
+  m_middleClickAction =
+      s.value("playback/middleClickAction", "Queue Last").toString();
   m_queueAutoFillMode =
-      s.value("playback/queueAutoFillMode", "Loop Album").toString();
-  m_autoScanOnStartup = s.value("library/autoScanOnStartup", false).toBool();
+      s.value("playback/queueAutoFillMode", "Loop Context").toString();
+  m_historyRetentionLimit =
+      s.value("playback/historyRetentionLimit", 200).toInt();
+  m_player.setHistoryLimit(static_cast<size_t>(m_historyRetentionLimit));
+
   int rMode = s.value("playback/repeatMode", 0).toInt();
   int sMode = s.value("playback/shuffleMode", 0).toInt();
   m_player.setRepeatMode(static_cast<core::RepeatMode>(rMode));
   m_player.setShuffleMode(static_cast<core::ShuffleMode>(sMode));
+
+  // Library & Folders
+  m_monitoredFolders = s.value("library/monitoredFolders").toStringList();
+  m_filesystemWatcher = s.value("library/filesystemWatcher", true).toBool();
+  m_autoScanOnStartup = s.value("library/autoScanOnStartup", false).toBool();
+  QStringList defaultFormats = {"FLAC", "WAV", "ALAC", "AIFF", "DSD (DSF/DFF)",
+                                "MP3",  "AAC", "M4A",  "OGG",  "OPUS"};
+  m_formatFilters =
+      s.value("library/formatFilters", defaultFormats).toStringList();
+  m_excludeFolders =
+      s.value("library/excludeFolders",
+              ".*, node_modules, temp, @eaDir, System Volume Information")
+          .toString();
+  m_artworkPriority =
+      s.value("library/artworkPriority", "Embedded Tags First").toString();
 
   // General
   m_language = s.value("general/language", "System Default").toString();
@@ -127,13 +168,37 @@ void QtBridge::loadSettings() {
 
 void QtBridge::saveSettings() {
   QSettings s("ParakeetAudio", "Parakeet");
-  s.setValue("library/monitoredFolders", m_monitoredFolders);
+
+  // Playback & DSP
+  s.setValue("playback/gaplessPlayback", m_gaplessPlayback);
+  s.setValue("playback/crossfadeEnabled", m_crossfadeEnabled);
+  s.setValue("playback/crossfadeDurationSec", m_crossfadeDurationSec);
+  s.setValue("playback/crossfadeCurve", m_crossfadeCurve);
+  s.setValue("playback/replayGainMode", m_replayGainMode);
+  s.setValue("playback/replayGainPreampDb", m_replayGainPreampDb);
+  s.setValue("playback/replayGainPreampWithoutGainDb",
+             m_replayGainPreampWithoutGainDb);
+  s.setValue("playback/truePeakLimiter", m_truePeakLimiter);
+  s.setValue("playback/shortSeekStepSec", m_shortSeekStepSec);
+  s.setValue("playback/longSeekStepSec", m_longSeekStepSec);
+  s.setValue("playback/stopAfterCurrentTrack", m_stopAfterCurrentTrack);
+
+  // Queue & Ergonomics
   s.setValue("playback/doubleClickAction", m_doubleClickAction);
+  s.setValue("playback/middleClickAction", m_middleClickAction);
   s.setValue("playback/queueAutoFillMode", m_queueAutoFillMode);
-  s.setValue("library/autoScanOnStartup", m_autoScanOnStartup);
+  s.setValue("playback/historyRetentionLimit", m_historyRetentionLimit);
   s.setValue("playback/repeatMode", static_cast<int>(m_player.getRepeatMode()));
   s.setValue("playback/shuffleMode",
              static_cast<int>(m_player.getShuffleMode()));
+
+  // Library & Folders
+  s.setValue("library/monitoredFolders", m_monitoredFolders);
+  s.setValue("library/filesystemWatcher", m_filesystemWatcher);
+  s.setValue("library/autoScanOnStartup", m_autoScanOnStartup);
+  s.setValue("library/formatFilters", m_formatFilters);
+  s.setValue("library/excludeFolders", m_excludeFolders);
+  s.setValue("library/artworkPriority", m_artworkPriority);
 
   // General
   s.setValue("general/language", m_language);
@@ -173,6 +238,9 @@ void QtBridge::saveSettings() {
   s.setValue("audio/channelProcessing", m_channelProcessing);
 
   emit settingsChanged();
+  emit playbackSettingsChanged();
+  emit queueSettingsChanged();
+  emit librarySettingsChanged();
   emit audioSettingsChanged();
 }
 
@@ -783,19 +851,223 @@ void QtBridge::rescanAllMonitoredFolders() {
   }
 }
 
+void QtBridge::incrementalQuickScan() {
+  if (m_isScanning.exchange(true))
+    return;
+  m_scanScanned = 0;
+  m_scanTotal = 0;
+  m_scanStatusText = "Quick scan in progress...";
+  emit scanningChanged();
+
+  std::vector<std::string> paths;
+  for (const auto &folder : m_monitoredFolders) {
+    paths.push_back(folder.toStdString());
+  }
+
+  std::thread([this, paths]() {
+    size_t totalAdded = 0;
+    for (const auto &path : paths) {
+      totalAdded += m_library.incrementalQuickScan(
+          path, [this](size_t scanned, size_t total) {
+            QMetaObject::invokeMethod(
+                this,
+                [this, scanned, total]() {
+                  m_scanScanned = static_cast<int>(scanned);
+                  m_scanTotal = static_cast<int>(total);
+                  m_scanStatusText = QString("Quick scanned %1 / %2 files...")
+                                         .arg(scanned)
+                                         .arg(total);
+                  emit scanningChanged();
+                },
+                Qt::QueuedConnection);
+          });
+    }
+
+    QMetaObject::invokeMethod(
+        this,
+        [this, totalAdded]() {
+          m_albumModel->reload();
+          m_trackModel->loadAllTracks();
+          refreshLibraryStats();
+          m_isScanning = false;
+          m_scanStatusText = QString("Quick scan complete: %1 new tracks added")
+                                 .arg(totalAdded);
+          emit scanningChanged();
+          emit scanFinished(static_cast<int>(totalAdded));
+        },
+        Qt::QueuedConnection);
+  }).detach();
+}
+
+void QtBridge::setGaplessPlayback(bool enable) {
+  if (m_gaplessPlayback != enable) {
+    m_gaplessPlayback = enable;
+    saveSettings();
+  }
+}
+
+void QtBridge::setCrossfadeEnabled(bool enable) {
+  if (m_crossfadeEnabled != enable) {
+    m_crossfadeEnabled = enable;
+    saveSettings();
+  }
+}
+
+void QtBridge::setCrossfadeDurationSec(qreal sec) {
+  if (!qFuzzyCompare(m_crossfadeDurationSec, sec)) {
+    m_crossfadeDurationSec = sec;
+    saveSettings();
+  }
+}
+
+void QtBridge::setCrossfadeCurve(const QString &curve) {
+  if (m_crossfadeCurve != curve) {
+    m_crossfadeCurve = curve;
+    saveSettings();
+  }
+}
+
+void QtBridge::setReplayGainMode(const QString &mode) {
+  if (m_replayGainMode != mode) {
+    m_replayGainMode = mode;
+    saveSettings();
+  }
+}
+
+void QtBridge::setReplayGainPreampDb(int db) {
+  if (m_replayGainPreampDb != db) {
+    m_replayGainPreampDb = db;
+    saveSettings();
+  }
+}
+
+void QtBridge::setReplayGainPreampWithoutGainDb(int db) {
+  if (m_replayGainPreampWithoutGainDb != db) {
+    m_replayGainPreampWithoutGainDb = db;
+    saveSettings();
+  }
+}
+
+void QtBridge::setTruePeakLimiter(bool enable) {
+  if (m_truePeakLimiter != enable) {
+    m_truePeakLimiter = enable;
+    saveSettings();
+  }
+}
+
+void QtBridge::setShortSeekStepSec(int sec) {
+  if (m_shortSeekStepSec != sec) {
+    m_shortSeekStepSec = sec;
+    saveSettings();
+  }
+}
+
+void QtBridge::setLongSeekStepSec(int sec) {
+  if (m_longSeekStepSec != sec) {
+    m_longSeekStepSec = sec;
+    saveSettings();
+  }
+}
+
+void QtBridge::setStopAfterCurrentTrack(bool enable) {
+  if (m_stopAfterCurrentTrack != enable) {
+    m_stopAfterCurrentTrack = enable;
+    saveSettings();
+  }
+}
+
 void QtBridge::setDoubleClickAction(const QString &action) {
-  m_doubleClickAction = action;
-  saveSettings();
+  if (m_doubleClickAction != action) {
+    m_doubleClickAction = action;
+    saveSettings();
+  }
+}
+
+void QtBridge::setMiddleClickAction(const QString &action) {
+  if (m_middleClickAction != action) {
+    m_middleClickAction = action;
+    saveSettings();
+  }
 }
 
 void QtBridge::setQueueAutoFillMode(const QString &mode) {
-  m_queueAutoFillMode = mode;
-  saveSettings();
+  if (m_queueAutoFillMode != mode) {
+    m_queueAutoFillMode = mode;
+    saveSettings();
+  }
+}
+
+void QtBridge::setHistoryRetentionLimit(int limit) {
+  if (m_historyRetentionLimit != limit) {
+    m_historyRetentionLimit = limit;
+    m_player.setHistoryLimit(static_cast<size_t>(limit));
+    saveSettings();
+  }
+}
+
+void QtBridge::clearPlaybackHistory() {
+  m_player.clearHistory();
+  emit queueChanged();
+}
+
+void QtBridge::setFilesystemWatcher(bool enable) {
+  if (m_filesystemWatcher != enable) {
+    m_filesystemWatcher = enable;
+    saveSettings();
+  }
 }
 
 void QtBridge::setAutoScanOnStartup(bool enable) {
-  m_autoScanOnStartup = enable;
-  saveSettings();
+  if (m_autoScanOnStartup != enable) {
+    m_autoScanOnStartup = enable;
+    saveSettings();
+  }
+}
+
+void QtBridge::setFormatFilters(const QStringList &formats) {
+  if (m_formatFilters != formats) {
+    m_formatFilters = formats;
+    saveSettings();
+  }
+}
+
+void QtBridge::setFormatFilterEnabled(const QString &format, bool enabled) {
+  if (enabled && !m_formatFilters.contains(format, Qt::CaseInsensitive)) {
+    m_formatFilters.append(format);
+    saveSettings();
+  } else if (!enabled &&
+             m_formatFilters.contains(format, Qt::CaseInsensitive)) {
+    m_formatFilters.removeAll(format);
+    saveSettings();
+  }
+}
+
+bool QtBridge::isFormatFilterEnabled(const QString &format) const {
+  for (const QString &f : m_formatFilters) {
+    if (f.compare(format, Qt::CaseInsensitive) == 0)
+      return true;
+  }
+  return false;
+}
+
+void QtBridge::setExcludeFolders(const QString &patterns) {
+  if (m_excludeFolders != patterns) {
+    m_excludeFolders = patterns;
+    saveSettings();
+  }
+}
+
+void QtBridge::setArtworkPriority(const QString &priority) {
+  if (m_artworkPriority != priority) {
+    m_artworkPriority = priority;
+    saveSettings();
+  }
+}
+
+void QtBridge::optimizeDatabase() {
+  m_library.optimizeDatabase();
+  m_scanStatusText = "Database optimized (VACUUM & REINDEX complete)";
+  emit scanningChanged();
 }
 
 void QtBridge::exportDatabaseBackup(const QString &targetFilePath) {

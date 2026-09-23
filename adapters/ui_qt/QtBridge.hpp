@@ -110,15 +110,54 @@ class QtBridge : public QObject {
   Q_PROPERTY(QString selectedAlbumArtHash READ selectedAlbumArtHash NOTIFY
                  selectedAlbumChanged)
 
-  // Settings (Playback & Library)
+  // Settings (Playback & DSP)
+  Q_PROPERTY(bool gaplessPlayback READ gaplessPlayback WRITE setGaplessPlayback
+                 NOTIFY playbackSettingsChanged)
+  Q_PROPERTY(bool crossfadeEnabled READ crossfadeEnabled WRITE
+                 setCrossfadeEnabled NOTIFY playbackSettingsChanged)
+  Q_PROPERTY(qreal crossfadeDurationSec READ crossfadeDurationSec WRITE
+                 setCrossfadeDurationSec NOTIFY playbackSettingsChanged)
+  Q_PROPERTY(QString crossfadeCurve READ crossfadeCurve WRITE setCrossfadeCurve
+                 NOTIFY playbackSettingsChanged)
+  Q_PROPERTY(QString replayGainMode READ replayGainMode WRITE setReplayGainMode
+                 NOTIFY playbackSettingsChanged)
+  Q_PROPERTY(int replayGainPreampDb READ replayGainPreampDb WRITE
+                 setReplayGainPreampDb NOTIFY playbackSettingsChanged)
   Q_PROPERTY(
-      QStringList monitoredFolders READ monitoredFolders NOTIFY settingsChanged)
+      int replayGainPreampWithoutGainDb READ replayGainPreampWithoutGainDb WRITE
+          setReplayGainPreampWithoutGainDb NOTIFY playbackSettingsChanged)
+  Q_PROPERTY(bool truePeakLimiter READ truePeakLimiter WRITE setTruePeakLimiter
+                 NOTIFY playbackSettingsChanged)
+  Q_PROPERTY(int shortSeekStepSec READ shortSeekStepSec WRITE
+                 setShortSeekStepSec NOTIFY playbackSettingsChanged)
+  Q_PROPERTY(int longSeekStepSec READ longSeekStepSec WRITE setLongSeekStepSec
+                 NOTIFY playbackSettingsChanged)
+  Q_PROPERTY(bool stopAfterCurrentTrack READ stopAfterCurrentTrack WRITE
+                 setStopAfterCurrentTrack NOTIFY playbackSettingsChanged)
+
+  // Settings (Queue Ergonomics)
   Q_PROPERTY(QString doubleClickAction READ doubleClickAction WRITE
-                 setDoubleClickAction NOTIFY settingsChanged)
+                 setDoubleClickAction NOTIFY queueSettingsChanged)
+  Q_PROPERTY(QString middleClickAction READ middleClickAction WRITE
+                 setMiddleClickAction NOTIFY queueSettingsChanged)
   Q_PROPERTY(QString queueAutoFillMode READ queueAutoFillMode WRITE
-                 setQueueAutoFillMode NOTIFY settingsChanged)
+                 setQueueAutoFillMode NOTIFY queueSettingsChanged)
+  Q_PROPERTY(int historyRetentionLimit READ historyRetentionLimit WRITE
+                 setHistoryRetentionLimit NOTIFY queueSettingsChanged)
+
+  // Settings (Library, Monitored Folders & Formats)
+  Q_PROPERTY(QStringList monitoredFolders READ monitoredFolders NOTIFY
+                 librarySettingsChanged)
+  Q_PROPERTY(bool filesystemWatcher READ filesystemWatcher WRITE
+                 setFilesystemWatcher NOTIFY librarySettingsChanged)
   Q_PROPERTY(bool autoScanOnStartup READ autoScanOnStartup WRITE
-                 setAutoScanOnStartup NOTIFY settingsChanged)
+                 setAutoScanOnStartup NOTIFY librarySettingsChanged)
+  Q_PROPERTY(QStringList formatFilters READ formatFilters WRITE setFormatFilters
+                 NOTIFY librarySettingsChanged)
+  Q_PROPERTY(QString excludeFolders READ excludeFolders WRITE setExcludeFolders
+                 NOTIFY librarySettingsChanged)
+  Q_PROPERTY(QString artworkPriority READ artworkPriority WRITE
+                 setArtworkPriority NOTIFY librarySettingsChanged)
 
   // Settings (General)
   Q_PROPERTY(
@@ -265,16 +304,48 @@ public:
     return m_selectedAlbumArtHash;
   }
 
-  [[nodiscard]] QStringList monitoredFolders() const {
-    return m_monitoredFolders;
+  // Playback & DSP Settings Getters
+  [[nodiscard]] bool gaplessPlayback() const { return m_gaplessPlayback; }
+  [[nodiscard]] bool crossfadeEnabled() const { return m_crossfadeEnabled; }
+  [[nodiscard]] qreal crossfadeDurationSec() const {
+    return m_crossfadeDurationSec;
   }
+  [[nodiscard]] QString crossfadeCurve() const { return m_crossfadeCurve; }
+  [[nodiscard]] QString replayGainMode() const { return m_replayGainMode; }
+  [[nodiscard]] int replayGainPreampDb() const { return m_replayGainPreampDb; }
+  [[nodiscard]] int replayGainPreampWithoutGainDb() const {
+    return m_replayGainPreampWithoutGainDb;
+  }
+  [[nodiscard]] bool truePeakLimiter() const { return m_truePeakLimiter; }
+  [[nodiscard]] int shortSeekStepSec() const { return m_shortSeekStepSec; }
+  [[nodiscard]] int longSeekStepSec() const { return m_longSeekStepSec; }
+  [[nodiscard]] bool stopAfterCurrentTrack() const {
+    return m_stopAfterCurrentTrack;
+  }
+
+  // Queue Ergonomics Settings Getters
   [[nodiscard]] QString doubleClickAction() const {
     return m_doubleClickAction;
+  }
+  [[nodiscard]] QString middleClickAction() const {
+    return m_middleClickAction;
   }
   [[nodiscard]] QString queueAutoFillMode() const {
     return m_queueAutoFillMode;
   }
+  [[nodiscard]] int historyRetentionLimit() const {
+    return m_historyRetentionLimit;
+  }
+
+  // Library & Formats Settings Getters
+  [[nodiscard]] QStringList monitoredFolders() const {
+    return m_monitoredFolders;
+  }
+  [[nodiscard]] bool filesystemWatcher() const { return m_filesystemWatcher; }
   [[nodiscard]] bool autoScanOnStartup() const { return m_autoScanOnStartup; }
+  [[nodiscard]] QStringList formatFilters() const { return m_formatFilters; }
+  [[nodiscard]] QString excludeFolders() const { return m_excludeFolders; }
+  [[nodiscard]] QString artworkPriority() const { return m_artworkPriority; }
 
   // General Settings Getters
   [[nodiscard]] QString language() const { return m_language; }
@@ -380,14 +451,40 @@ public:
   Q_INVOKABLE void showInFileManager(const QString &filePath);
   Q_INVOKABLE void copyToClipboard(const QString &text);
 
-  // Settings
+  // Playback & DSP Settings
+  Q_INVOKABLE void setGaplessPlayback(bool enable);
+  Q_INVOKABLE void setCrossfadeEnabled(bool enable);
+  Q_INVOKABLE void setCrossfadeDurationSec(qreal sec);
+  Q_INVOKABLE void setCrossfadeCurve(const QString &curve);
+  Q_INVOKABLE void setReplayGainMode(const QString &mode);
+  Q_INVOKABLE void setReplayGainPreampDb(int db);
+  Q_INVOKABLE void setReplayGainPreampWithoutGainDb(int db);
+  Q_INVOKABLE void setTruePeakLimiter(bool enable);
+  Q_INVOKABLE void setShortSeekStepSec(int sec);
+  Q_INVOKABLE void setLongSeekStepSec(int sec);
+  Q_INVOKABLE void setStopAfterCurrentTrack(bool enable);
+
+  // Queue Settings
+  Q_INVOKABLE void setDoubleClickAction(const QString &action);
+  Q_INVOKABLE void setMiddleClickAction(const QString &action);
+  Q_INVOKABLE void setQueueAutoFillMode(const QString &mode);
+  Q_INVOKABLE void setHistoryRetentionLimit(int limit);
+  Q_INVOKABLE void clearPlaybackHistory();
+
+  // Library & Folders Settings
   Q_INVOKABLE void addMonitoredFolder(const QString &folderPath);
   Q_INVOKABLE void removeMonitoredFolder(int index);
   Q_INVOKABLE void rescanAllMonitoredFolders();
-  Q_INVOKABLE void setDoubleClickAction(const QString &action);
-  Q_INVOKABLE void setQueueAutoFillMode(const QString &mode);
+  Q_INVOKABLE void incrementalQuickScan();
+  Q_INVOKABLE void setFilesystemWatcher(bool enable);
   Q_INVOKABLE void setAutoScanOnStartup(bool enable);
+  Q_INVOKABLE void setFormatFilters(const QStringList &formats);
+  Q_INVOKABLE void setFormatFilterEnabled(const QString &format, bool enabled);
+  Q_INVOKABLE bool isFormatFilterEnabled(const QString &format) const;
+  Q_INVOKABLE void setExcludeFolders(const QString &patterns);
+  Q_INVOKABLE void setArtworkPriority(const QString &priority);
   Q_INVOKABLE void exportDatabaseBackup(const QString &targetFilePath);
+  Q_INVOKABLE void optimizeDatabase();
 
   // General Settings
   Q_INVOKABLE void setLanguage(const QString &lang);
@@ -435,6 +532,9 @@ signals:
   void playbackModeChanged();
   void queueChanged();
   void settingsChanged();
+  void playbackSettingsChanged();
+  void queueSettingsChanged();
+  void librarySettingsChanged();
   void audioSettingsChanged();
   void audioDevicesChanged();
 
@@ -501,11 +601,34 @@ private:
   int m_selectedAlbumTrackCount{0};
   QString m_selectedAlbumArtHash;
 
-  // Settings
-  QStringList m_monitoredFolders;
+  // Playback & DSP Settings
+  bool m_gaplessPlayback{true};
+  bool m_crossfadeEnabled{false};
+  qreal m_crossfadeDurationSec{2.0};
+  QString m_crossfadeCurve{"Equal Power (Constant Volume)"};
+  QString m_replayGainMode{"Smart Gain (Auto Track/Album)"};
+  int m_replayGainPreampDb{0};
+  int m_replayGainPreampWithoutGainDb{-6};
+  bool m_truePeakLimiter{true};
+  int m_shortSeekStepSec{5};
+  int m_longSeekStepSec{30};
+  bool m_stopAfterCurrentTrack{false};
+
+  // Queue Ergonomics Settings
   QString m_doubleClickAction{"Play Now"};
-  QString m_queueAutoFillMode{"Loop Album"};
+  QString m_middleClickAction{"Queue Last"};
+  QString m_queueAutoFillMode{"Loop Context"};
+  int m_historyRetentionLimit{200};
+
+  // Library & Folders Settings
+  QStringList m_monitoredFolders;
+  bool m_filesystemWatcher{true};
   bool m_autoScanOnStartup{false};
+  QStringList m_formatFilters{"FLAC", "WAV", "ALAC", "AIFF", "DSD (DSF/DFF)",
+                              "MP3",  "AAC", "M4A",  "OGG",  "OPUS"};
+  QString m_excludeFolders{
+      ".*, node_modules, temp, @eaDir, System Volume Information"};
+  QString m_artworkPriority{"Embedded Tags First"};
 
   // General Settings
   QString m_language{"System Default"};

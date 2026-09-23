@@ -170,6 +170,24 @@ Dialog {
         }
     }
 
+    component StyledTextField: TextField {
+        id: tfControl
+        implicitHeight: 28
+        leftPadding: Theme.spacingMedium
+        rightPadding: Theme.spacingMedium
+        font.pixelSize: Theme.fontSizeSmall
+        font.family: Theme.fontFamily
+        color: Theme.textPrimary
+        selectionColor: Theme.selection
+        selectedTextColor: Theme.accentHover
+        background: Rectangle {
+            color: Theme.surfaceElevated
+            border.color: tfControl.activeFocus ? Theme.accent : Theme.panelBorder
+            border.width: 1
+            radius: Theme.cornerRadiusSmall
+        }
+    }
+
     FileDialog {
         id: themeFileDialog
         title: "Select Theme File (.json)"
@@ -179,11 +197,55 @@ Dialog {
         }
     }
 
+    FileDialog {
+        id: exportBackupDialog
+        title: "Export SQLite Database Backup"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["SQLite Database (*.db)", "All Files (*)"]
+        onAccepted: {
+            bridge.exportDatabaseBackup(selectedFile.toString());
+        }
+    }
+
     FolderDialog {
         id: addFolderDialog
         title: "Add Folder to Monitored Music Folders"
         onAccepted: {
             bridge.addMonitoredFolder(selectedFolder.toString());
+        }
+    }
+
+    Dialog {
+        id: confirmClearDbDialog
+        title: "Clear Entire Music Library"
+        modal: true
+        anchors.centerIn: parent
+        width: 420
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        background: Rectangle {
+            color: Theme.surface
+            border.color: Theme.panelBorder
+            border.width: 1
+            radius: Theme.cornerRadiusMedium
+        }
+        contentItem: ColumnLayout {
+            spacing: 12
+            Text {
+                text: "Are you sure you want to clear the entire music database?"
+                font.pixelSize: Theme.fontSizeBase
+                font.bold: true
+                color: Theme.textPrimary
+            }
+            Text {
+                text: "All indexed track records and metadata will be permanently purged from the local database. Your actual audio files on disk will NOT be touched or modified."
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.textMuted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+        }
+        onAccepted: {
+            bridge.clearLibrary();
         }
     }
 
@@ -261,10 +323,11 @@ Dialog {
                         { idx: 0, label: "General", icon: "music" },
                         { idx: 1, label: "Themes & Appearance", icon: "grid" },
                         { idx: 2, label: "Audio Output", icon: "volume" },
-                        { idx: 3, label: "Playback & Queue", icon: "queue" },
-                        { idx: 4, label: "Library & Folders", icon: "folder" },
-                        { idx: 5, label: "Plugins & Extensions", icon: "equalizer" },
-                        { idx: 6, label: "Keyboard Shortcuts", icon: "info" }
+                        { idx: 3, label: "Playback & DSP", icon: "equalizer" },
+                        { idx: 4, label: "Queue Ergonomics", icon: "queue" },
+                        { idx: 5, label: "Library & Folders", icon: "folder" },
+                        { idx: 6, label: "Plugins & Extensions", icon: "equalizer" },
+                        { idx: 7, label: "Keyboard Shortcuts", icon: "info" }
                     ]
 
                     delegate: Rectangle {
@@ -1353,35 +1416,446 @@ Dialog {
                 }
             }
 
-            // Playback & Queue
+            // Playback & DSP
             ScrollView {
                 anchors.fill: parent
                 anchors.margins: 20
                 visible: activeCategory === 3
                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                clip: true
 
                 ColumnLayout {
-                    width: parent.width
+                    width: parent.width - 24
                     spacing: 16
 
                     Text {
-                        text: "Playback & Queue Behavior"
+                        text: "Playback Transitions & DSP Engine"
                         font.pixelSize: Theme.fontSizeLarge
                         font.bold: true
                         color: Theme.textPrimary
                     }
 
+                    Text {
+                        text: "Configure sample-accurate gapless transitions, crossfading profiles, ReplayGain loudness normalization, and seek ergonomics."
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.textMuted
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+
                     Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
 
-                    // Double-click Action
-                    ColumnLayout {
-                        spacing: 4
-                        Text { text: "Action on Double-Clicking a Track:"; font.bold: true; color: Theme.textPrimary }
+                    // Gapless Playback & Crossfade
+                    Text {
+                        text: "Transitions & Fading"
+                        font.pixelSize: Theme.fontSizeBase
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    StyledCheckBox {
+                        Layout.fillWidth: true
+                        text: "Enable sample-accurate gapless playback (background pre-buffering between tracks)"
+                        checked: bridge.gaplessPlayback
+                        onToggled: bridge.setGaplessPlayback(checked)
+                    }
+
+                    StyledCheckBox {
+                        Layout.fillWidth: true
+                        text: "Enable smooth crossfading between consecutive tracks"
+                        checked: bridge.crossfadeEnabled
+                        onToggled: bridge.setCrossfadeEnabled(checked)
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+                        opacity: bridge.crossfadeEnabled ? 1.0 : 0.4
+                        enabled: bridge.crossfadeEnabled
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Crossfade Duration"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Duration of overlapping transition between consecutive tracks."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 10
+                            StyledSlider {
+                                id: crossfadeSlider
+                                Layout.preferredWidth: 140
+                                from: 0.5
+                                to: 10.0
+                                stepSize: 0.5
+                                value: bridge.crossfadeDurationSec
+                                onMoved: bridge.setCrossfadeDurationSec(value)
+                            }
+                            Text {
+                                text: crossfadeSlider.value.toFixed(1) + " s"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.accentHover
+                                Layout.preferredWidth: 45
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+                        opacity: bridge.crossfadeEnabled ? 1.0 : 0.4
+                        enabled: bridge.crossfadeEnabled
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Crossfade Curve Profile"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Select attenuation curve profile during volume transitions."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        StyledComboBox {
+                            id: crossfadeCurveCombo
+                            Layout.preferredWidth: 260
+                            model: ["Equal Power (Constant Volume)", "Linear Transition", "Logarithmic Fade"]
+                            currentIndex: Math.max(0, model.indexOf(bridge.crossfadeCurve))
+                            onActivated: function(index) {
+                                bridge.setCrossfadeCurve(model[index])
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // ReplayGain & Loudness Normalization
+                    Text {
+                        text: "ReplayGain Loudness Normalization"
+                        font.pixelSize: Theme.fontSizeBase
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "ReplayGain Mode"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Target loudness standard (EBU R128 / ReplayGain 2.0)."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        StyledComboBox {
+                            id: replayGainCombo
+                            Layout.preferredWidth: 260
+                            model: ["Disabled", "Track Gain (Uniform Loudness)", "Album Gain (Preserves Album Dynamics)", "Smart Gain (Auto Track/Album)"]
+                            currentIndex: Math.max(0, model.indexOf(bridge.replayGainMode))
+                            onActivated: function(index) {
+                                bridge.setReplayGainMode(model[index])
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+                        opacity: bridge.replayGainMode !== "Disabled" ? 1.0 : 0.4
+                        enabled: bridge.replayGainMode !== "Disabled"
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Tagged Track Preamp"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Volume offset applied to tracks with ReplayGain tags."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 10
+                            StyledSlider {
+                                id: taggedPreampSlider
+                                Layout.preferredWidth: 140
+                                from: -12
+                                to: 12
+                                stepSize: 1
+                                value: bridge.replayGainPreampDb
+                                onMoved: bridge.setReplayGainPreampDb(Math.round(value))
+                            }
+                            Text {
+                                text: (taggedPreampSlider.value > 0 ? "+" : "") + Math.round(taggedPreampSlider.value) + " dB"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.accentHover
+                                Layout.preferredWidth: 55
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+                        opacity: bridge.replayGainMode !== "Disabled" ? 1.0 : 0.4
+                        enabled: bridge.replayGainMode !== "Disabled"
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Untagged Fallback Preamp"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Volume attenuation applied to tracks missing ReplayGain tags."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 10
+                            StyledSlider {
+                                id: untaggedPreampSlider
+                                Layout.preferredWidth: 140
+                                from: -12
+                                to: 12
+                                stepSize: 1
+                                value: bridge.replayGainPreampWithoutGainDb
+                                onMoved: bridge.setReplayGainPreampWithoutGainDb(Math.round(value))
+                            }
+                            Text {
+                                text: (untaggedPreampSlider.value > 0 ? "+" : "") + Math.round(untaggedPreampSlider.value) + " dB"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.accentHover
+                                Layout.preferredWidth: 55
+                            }
+                        }
+                    }
+
+                    StyledCheckBox {
+                        Layout.fillWidth: true
+                        text: "Enable true-peak anti-clipping limiter (prevents inter-sample DAC clipping)"
+                        checked: bridge.truePeakLimiter
+                        onToggled: bridge.setTruePeakLimiter(checked)
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // Seek Ergonomics & Transport
+                    Text {
+                        text: "Transport & Seek Steps"
+                        font.pixelSize: Theme.fontSizeBase
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Short Seek Step (Arrow Keys)"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Time skipped with Left / Right arrow keys."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 10
+                            StyledSlider {
+                                id: shortSeekSlider
+                                Layout.preferredWidth: 140
+                                from: 1
+                                to: 10
+                                stepSize: 1
+                                value: bridge.shortSeekStepSec
+                                onMoved: bridge.setShortSeekStepSec(Math.round(value))
+                            }
+                            Text {
+                                text: Math.round(shortSeekSlider.value) + " s"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.accentHover
+                                Layout.preferredWidth: 40
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Long Seek Step (Shift + Arrow Keys)"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Time skipped with Shift + Left / Right keys."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 10
+                            StyledSlider {
+                                id: longSeekSlider
+                                Layout.preferredWidth: 140
+                                from: 15
+                                to: 60
+                                stepSize: 5
+                                value: bridge.longSeekStepSec
+                                onMoved: bridge.setLongSeekStepSec(Math.round(value))
+                            }
+                            Text {
+                                text: Math.round(longSeekSlider.value) + " s"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.accentHover
+                                Layout.preferredWidth: 40
+                            }
+                        }
+                    }
+
+                    StyledCheckBox {
+                        Layout.fillWidth: true
+                        text: "Stop playback after current track finishes (Single-track playback mode)"
+                        checked: bridge.stopAfterCurrentTrack
+                        onToggled: bridge.setStopAfterCurrentTrack(checked)
+                    }
+                }
+            }
+
+            // Queue Ergonomics
+            ScrollView {
+                anchors.fill: parent
+                anchors.margins: 20
+                visible: activeCategory === 4
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                clip: true
+
+                ColumnLayout {
+                    width: parent.width - 24
+                    spacing: 16
+
+                    Text {
+                        text: "Queue & Interaction Ergonomics"
+                        font.pixelSize: Theme.fontSizeLarge
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    Text {
+                        text: "Customize mouse double-click and middle-click gestures, queue exhaustion behavior, shuffle strategies, and history retention."
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.textMuted
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // Mouse Click Actions
+                    Text {
+                        text: "Mouse Click Actions"
+                        font.pixelSize: Theme.fontSizeBase
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Track Double-Click Action"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Action executed when double-clicking a track in the library or album view."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
                         RowLayout {
                             spacing: 8
                             Repeater {
                                 model: ["Play Now", "Play Next", "Queue Last"]
-                                delegate: Button {
+                                delegate: StyledButton {
                                     text: modelData
                                     highlighted: bridge.doubleClickAction === modelData
                                     onClicked: bridge.setDoubleClickAction(modelData)
@@ -1390,15 +1864,78 @@ Dialog {
                         }
                     }
 
-                    // Queue Auto-Fill Mode
-                    ColumnLayout {
-                        spacing: 4
-                        Text { text: "When Queue Ends:"; font.bold: true; color: Theme.textPrimary }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Track Middle-Click Action"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Action executed when middle-clicking a track with mouse wheel."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
                         RowLayout {
                             spacing: 8
                             Repeater {
-                                model: ["Stop", "Loop Album", "Continue Library"]
-                                delegate: Button {
+                                model: ["Queue Last", "Play Next", "Play Now"]
+                                delegate: StyledButton {
+                                    text: modelData
+                                    highlighted: bridge.middleClickAction === modelData
+                                    onClicked: bridge.setMiddleClickAction(modelData)
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // Queue Exhaustion & Autoplay
+                    Text {
+                        text: "Queue Exhaustion & Autoplay"
+                        font.pixelSize: Theme.fontSizeBase
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "When Queue Ends"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Behavior when all upcoming queued tracks finish playing."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 8
+                            Repeater {
+                                model: ["Stop Playback", "Loop Context", "Smart Autoplay (Similar Tracks)"]
+                                delegate: StyledButton {
                                     text: modelData
                                     highlighted: bridge.queueAutoFillMode === modelData
                                     onClicked: bridge.setQueueAutoFillMode(modelData)
@@ -1407,22 +1944,112 @@ Dialog {
                         }
                     }
 
-                    // Shuffle Mode Selector
-                    ColumnLayout {
-                        spacing: 4
-                        Text { text: "Default Shuffle Strategy:"; font.bold: true; color: Theme.textPrimary }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // Shuffle Mode Preference
+                    Text {
+                        text: "Shuffle Strategy"
+                        font.pixelSize: Theme.fontSizeBase
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Default Shuffle Mode"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Fisher-Yates track shuffle or album-by-album grouped shuffle."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
                         RowLayout {
                             spacing: 8
-                            Button {
-                                text: "Track Shuffle (Pure Random)"
+                            StyledButton {
+                                text: "Track Shuffle (Fisher-Yates)"
                                 highlighted: bridge.shuffleMode === 1
                                 onClicked: bridge.setShuffleMode(1)
                             }
-                            Button {
-                                text: "Album Shuffle (Keep Album Tracks in Order)"
+                            StyledButton {
+                                text: "Album Shuffle (Keep Album Tracks)"
                                 highlighted: bridge.shuffleMode === 2
                                 onClicked: bridge.setShuffleMode(2)
                             }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // Playback History
+                    Text {
+                        text: "Playback History"
+                        font.pixelSize: Theme.fontSizeBase
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "History Retention Size"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Maximum number of past tracks remembered in the reversible history stack."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 10
+                            StyledSlider {
+                                id: historySlider
+                                Layout.preferredWidth: 140
+                                from: 50
+                                to: 1000
+                                stepSize: 50
+                                value: bridge.historyRetentionLimit
+                                onMoved: bridge.setHistoryRetentionLimit(Math.round(value))
+                            }
+                            Text {
+                                text: Math.round(historySlider.value) + " tracks"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.accentHover
+                                Layout.preferredWidth: 70
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Item { Layout.fillWidth: true }
+                        StyledButton {
+                            text: "Clear Playback History Now"
+                            onClicked: bridge.clearPlaybackHistory()
                         }
                     }
                 }
@@ -1432,11 +2059,12 @@ Dialog {
             ScrollView {
                 anchors.fill: parent
                 anchors.margins: 20
-                visible: activeCategory === 4
+                visible: activeCategory === 5
                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                clip: true
 
                 ColumnLayout {
-                    width: parent.width
+                    width: parent.width - 24
                     spacing: 16
 
                     RowLayout {
@@ -1448,24 +2076,33 @@ Dialog {
                             color: Theme.textPrimary
                         }
                         Item { Layout.fillWidth: true }
-                        Button {
-                            text: "Add Folder..."
+                        StyledButton {
+                            text: "+ Add Folder..."
                             onClicked: addFolderDialog.open()
                         }
                     }
 
+                    Text {
+                        text: "Configure monitored filesystem directories, real-time file watching, format filters, and library maintenance."
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.textMuted
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+
                     Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
 
-                    // List of monitored directories
+                    // Monitored Directories List
                     ListView {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Math.max(100, count * 36)
+                        Layout.preferredHeight: Math.max(70, count * 38)
                         model: bridge.monitoredFolders
                         clip: true
+                        interactive: false
 
                         delegate: Rectangle {
                             width: parent.width
-                            height: 32
+                            height: 34
                             color: Theme.background
                             border.color: Theme.panelBorder
                             border.width: 1
@@ -1477,7 +2114,12 @@ Dialog {
                                 anchors.rightMargin: 10
                                 spacing: 8
 
-                                VectorIcon { name: "folder"; width: 12; height: 12; color: Theme.accent }
+                                VectorIcon {
+                                    name: "folder"
+                                    width: 14
+                                    height: 14
+                                    color: Theme.accent
+                                }
                                 Text {
                                     text: modelData
                                     font.pixelSize: Theme.fontSizeSmall
@@ -1485,7 +2127,11 @@ Dialog {
                                     elide: Text.ElideMiddle
                                     Layout.fillWidth: true
                                 }
-                                Button {
+                                StyledButton {
+                                    text: "Reveal"
+                                    onClicked: bridge.showInFileManager(modelData)
+                                }
+                                StyledButton {
                                     text: "Remove"
                                     onClicked: bridge.removeMonitoredFolder(index)
                                 }
@@ -1493,45 +2139,196 @@ Dialog {
                         }
                     }
 
-                    CheckBox {
-                        text: "Automatically rescan monitored folders on startup"
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 50
+                        visible: bridge.monitoredFolders.length === 0
+                        color: Theme.background
+                        border.color: Theme.panelBorder
+                        border.width: 1
+                        radius: Theme.cornerRadiusSmall
+
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 8
+                            VectorIcon { name: "folder"; width: 16; height: 16; color: Theme.textMuted }
+                            Text {
+                                text: "No monitored folders configured. Click '+ Add Folder...' to add music."
+                                font.pixelSize: Theme.fontSizeSmall
+                                color: Theme.textMuted
+                            }
+                        }
+                    }
+
+                    StyledCheckBox {
+                        Layout.fillWidth: true
+                        text: "Enable real-time filesystem watcher (auto-detects added, modified, or deleted files)"
+                        checked: bridge.filesystemWatcher
+                        onToggled: bridge.setFilesystemWatcher(checked)
+                    }
+
+                    StyledCheckBox {
+                        Layout.fillWidth: true
+                        text: "Automatically rescan all monitored folders on application startup"
                         checked: bridge.autoScanOnStartup
                         onToggled: bridge.setAutoScanOnStartup(checked)
                     }
 
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // Whitelisted File Formats
                     Text {
-                        text: "Library Maintenance Actions"
+                        text: "Whitelisted Audio Formats"
+                        font.pixelSize: Theme.fontSizeBase
                         font.bold: true
                         color: Theme.textPrimary
                     }
 
+                    Text {
+                        text: "Select audio file extensions that will be scanned and indexed into the database."
+                        font.pixelSize: Theme.fontSizeSmall - 1
+                        color: Theme.textMuted
+                    }
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 5
+                        rowSpacing: 8
+                        columnSpacing: 12
+
+                        Repeater {
+                            model: ["FLAC", "WAV", "ALAC", "AIFF", "DSD (DSF/DFF)", "MP3", "AAC", "M4A", "OGG", "OPUS"]
+                            delegate: StyledCheckBox {
+                                text: modelData
+                                checked: bridge.isFormatFilterEnabled(modelData)
+                                onToggled: bridge.setFormatFilterEnabled(modelData, checked)
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // Folder Exclusion Patterns
+                    Text {
+                        text: "Folder Exclusion Patterns"
+                        font.pixelSize: Theme.fontSizeBase
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    Text {
+                        text: "Comma-separated subfolder names and glob patterns to ignore during scanning."
+                        font.pixelSize: Theme.fontSizeSmall - 1
+                        color: Theme.textMuted
+                    }
+
+                    StyledTextField {
+                        Layout.fillWidth: true
+                        text: bridge.excludeFolders
+                        onEditingFinished: bridge.setExcludeFolders(text)
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // Artwork Search Priority
                     RowLayout {
-                        spacing: 8
-                        Button {
-                            text: "Rescan All Folders"
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Cover Artwork Search Priority"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Priority order between embedded audio file tags and external folder images (cover.jpg, folder.jpg)."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        StyledComboBox {
+                            id: artworkPriorityCombo
+                            Layout.preferredWidth: 260
+                            model: ["Embedded Tags First", "External Folder Art First"]
+                            currentIndex: Math.max(0, model.indexOf(bridge.artworkPriority))
+                            onActivated: function(index) {
+                                bridge.setArtworkPriority(model[index])
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // Maintenance Operations
+                    Text {
+                        text: "Library Maintenance & Database Utilities"
+                        font.pixelSize: Theme.fontSizeBase
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 3
+                        rowSpacing: 10
+                        columnSpacing: 10
+
+                        StyledButton {
+                            Layout.fillWidth: true
+                            text: "Rescan All Folders Now"
                             onClicked: bridge.rescanAllMonitoredFolders()
                         }
-                        Button {
-                            text: "Purge Missing Tracks"
+
+                        StyledButton {
+                            Layout.fillWidth: true
+                            text: "Incremental Quick Scan"
+                            onClicked: bridge.incrementalQuickScan()
+                        }
+
+                        StyledButton {
+                            Layout.fillWidth: true
+                            text: "Purge Missing / Dead Files"
                             onClicked: bridge.purgeMissingTracks()
                         }
-                        Button {
-                            text: "Clear Database"
-                            onClicked: bridge.clearLibrary()
+
+                        StyledButton {
+                            Layout.fillWidth: true
+                            text: "Export Database Backup..."
+                            onClicked: exportBackupDialog.open()
+                        }
+
+                        StyledButton {
+                            Layout.fillWidth: true
+                            text: "Optimize SQLite Database"
+                            onClicked: bridge.optimizeDatabase()
+                        }
+
+                        StyledButton {
+                            Layout.fillWidth: true
+                            text: "Clear Entire Database"
+                            onClicked: confirmClearDbDialog.open()
                         }
                     }
                 }
             }
 
-            // Plugins
+            // Plugins & Extensions
             ScrollView {
                 anchors.fill: parent
                 anchors.margins: 20
-                visible: activeCategory === 5
+                visible: activeCategory === 6
                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                clip: true
 
                 ColumnLayout {
-                    width: parent.width
+                    width: parent.width - 24
                     spacing: 16
 
                     Text {
@@ -1554,6 +2351,7 @@ Dialog {
                         Layout.preferredHeight: 60
                         color: Theme.background
                         border.color: Theme.panelBorder
+                        border.width: 1
                         radius: Theme.cornerRadiusSmall
                         RowLayout {
                             anchors.fill: parent
@@ -1568,15 +2366,16 @@ Dialog {
                 }
             }
 
-            // Keyboard shortcuts
+            // Keyboard Shortcuts
             ScrollView {
                 anchors.fill: parent
                 anchors.margins: 20
-                visible: activeCategory === 6
+                visible: activeCategory === 7
                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                clip: true
 
                 ColumnLayout {
-                    width: parent.width
+                    width: parent.width - 24
                     spacing: 12
 
                     Text {
