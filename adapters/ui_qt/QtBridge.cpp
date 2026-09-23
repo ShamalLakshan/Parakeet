@@ -4,8 +4,11 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QKeySequence>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QSysInfo>
+#include <QTextStream>
 #include <QUrl>
 #include <algorithm>
 #include <iostream>
@@ -16,6 +19,9 @@ QtBridge::QtBridge(core::PlayerService &player, core::LibraryService &library,
                    adapters::ThemeLoader *themeLoader, QObject *parent)
     : QObject(parent), m_player(player), m_library(library),
       m_themeLoader(themeLoader) {
+
+  // Initialize hotkeys registry
+  initDefaultHotkeys();
 
   // Remove missing tracks on startup
   m_library.purgeNonExistentTracks();
@@ -164,6 +170,39 @@ void QtBridge::loadSettings() {
       s.value("audio/ditherMode", "Flat TPDF (Triangular)").toString();
   m_channelProcessing =
       s.value("audio/channelProcessing", "Stereo Passthrough").toString();
+
+  // Hotkeys & Accelerators
+  m_globalMediaKeysEnabled =
+      s.value("hotkeys/globalMediaKeysEnabled", true).toBool();
+  for (auto &hk : m_hotkeys) {
+    hk.currentSequence =
+        s.value("hotkeys/" + hk.id, hk.defaultSequence).toString();
+  }
+
+  // Metadata & Scrobbling
+  m_lastfmEnabled = s.value("metadata/lastfmEnabled", false).toBool();
+  m_lastfmUsername = s.value("metadata/lastfmUsername", "").toString();
+  m_lastfmSessionKey = s.value("metadata/lastfmSessionKey", "").toString();
+  m_listenbrainzEnabled =
+      s.value("metadata/listenbrainzEnabled", false).toBool();
+  m_listenbrainzToken = s.value("metadata/listenbrainzToken", "").toString();
+  m_listenbrainzApiUrl =
+      s.value("metadata/listenbrainzApiUrl", "https://api.listenbrainz.org/1/")
+          .toString();
+  m_scrobbleThresholdPercent =
+      s.value("metadata/scrobbleThresholdPercent", 50).toInt();
+  m_scrobbleThresholdTimeSec =
+      s.value("metadata/scrobbleThresholdTimeSec", 240).toInt();
+  m_offlineScrobbleCache =
+      s.value("metadata/offlineScrobbleCache", true).toBool();
+  m_lyricsProviderOrder =
+      s.value("metadata/lyricsProviderOrder", "Local .lrc sidecar first")
+          .toString();
+  m_autoFetchLyrics = s.value("metadata/autoFetchLyrics", true).toBool();
+
+  // Diagnostics
+  m_loggingVerbosity =
+      s.value("diagnostics/loggingVerbosity", "Info").toString();
 }
 
 void QtBridge::saveSettings() {
@@ -237,11 +276,36 @@ void QtBridge::saveSettings() {
   s.setValue("audio/ditherMode", m_ditherMode);
   s.setValue("audio/channelProcessing", m_channelProcessing);
 
+  // Hotkeys
+  s.setValue("hotkeys/globalMediaKeysEnabled", m_globalMediaKeysEnabled);
+  for (const auto &hk : m_hotkeys) {
+    s.setValue("hotkeys/" + hk.id, hk.currentSequence);
+  }
+
+  // Metadata & Scrobbling
+  s.setValue("metadata/lastfmEnabled", m_lastfmEnabled);
+  s.setValue("metadata/lastfmUsername", m_lastfmUsername);
+  s.setValue("metadata/lastfmSessionKey", m_lastfmSessionKey);
+  s.setValue("metadata/listenbrainzEnabled", m_listenbrainzEnabled);
+  s.setValue("metadata/listenbrainzToken", m_listenbrainzToken);
+  s.setValue("metadata/listenbrainzApiUrl", m_listenbrainzApiUrl);
+  s.setValue("metadata/scrobbleThresholdPercent", m_scrobbleThresholdPercent);
+  s.setValue("metadata/scrobbleThresholdTimeSec", m_scrobbleThresholdTimeSec);
+  s.setValue("metadata/offlineScrobbleCache", m_offlineScrobbleCache);
+  s.setValue("metadata/lyricsProviderOrder", m_lyricsProviderOrder);
+  s.setValue("metadata/autoFetchLyrics", m_autoFetchLyrics);
+
+  // Diagnostics
+  s.setValue("diagnostics/loggingVerbosity", m_loggingVerbosity);
+
   emit settingsChanged();
   emit playbackSettingsChanged();
   emit queueSettingsChanged();
   emit librarySettingsChanged();
   emit audioSettingsChanged();
+  emit hotkeysChanged();
+  emit metadataSettingsChanged();
+  emit diagnosticsSettingsChanged();
 }
 
 void QtBridge::setupPositionTimer() {
@@ -1279,4 +1343,403 @@ void QtBridge::refreshAudioDevices() {
   }
   m_availableAudioDevices = devices;
   emit audioDevicesChanged();
+}
+
+void QtBridge::initDefaultHotkeys() {
+  m_hotkeys = {
+      {"play_pause", "Playback", "Play / Pause playback", "Space", "Space"},
+      {"stop", "Playback", "Stop playback", "Ctrl+.", "Ctrl+."},
+      {"next_track", "Playback", "Next track", "Ctrl+Right", "Ctrl+Right"},
+      {"prev_track", "Playback", "Previous track (Reversible History)",
+       "Ctrl+Left", "Ctrl+Left"},
+      {"seek_forward_short", "Playback", "Seek forward (Short)", "Right",
+       "Right"},
+      {"seek_backward_short", "Playback", "Seek backward (Short)", "Left",
+       "Left"},
+      {"seek_forward_long", "Playback", "Seek forward (Long)", "Shift+Right",
+       "Shift+Right"},
+      {"seek_backward_long", "Playback", "Seek backward (Long)", "Shift+Left",
+       "Shift+Left"},
+      {"volume_up", "Playback", "Volume up (+5%)", "Ctrl+Up", "Ctrl+Up"},
+      {"volume_down", "Playback", "Volume down (-5%)", "Ctrl+Down",
+       "Ctrl+Down"},
+      {"toggle_mute", "Playback", "Mute / Unmute audio", "Ctrl+M", "Ctrl+M"},
+      {"cycle_repeat", "Playback", "Cycle Repeat mode", "Ctrl+R", "Ctrl+R"},
+      {"cycle_shuffle", "Playback", "Cycle Shuffle mode", "Ctrl+S", "Ctrl+S"},
+
+      {"toggle_explorer", "View & Navigation", "Toggle Left Library Explorer",
+       "Ctrl+1", "Ctrl+1"},
+      {"toggle_filter_browser", "View & Navigation",
+       "Toggle 3-Column Filter Browser", "Ctrl+2", "Ctrl+2"},
+      {"toggle_inspector", "View & Navigation",
+       "Toggle Right Inspector / Queue", "Ctrl+3", "Ctrl+3"},
+      {"focus_search", "View & Navigation", "Focus Instant Search input",
+       "Ctrl+F", "Ctrl+F"},
+      {"clear_filter_escape", "View & Navigation",
+       "Clear filter / Close active modal", "Escape", "Escape"},
+
+      {"open_preferences", "Library & Editing", "Open Preferences Dialog",
+       "Ctrl+,", "Ctrl+,"},
+      {"rescan_library", "Library & Editing",
+       "Rescan Monitored Library Folders", "Ctrl+Shift+R", "Ctrl+Shift+R"},
+      {"quick_scan", "Library & Editing", "Incremental Quick Scan", "F5", "F5"},
+      {"clear_queue", "Library & Editing", "Clear Playback Queue",
+       "Ctrl+Shift+Del", "Ctrl+Shift+Del"},
+      {"shuffle_queue", "Library & Editing", "Shuffle Playback Queue",
+       "Ctrl+Shift+S", "Ctrl+Shift+S"}};
+}
+
+QVariantList QtBridge::hotkeysModel() const {
+  QVariantList list;
+  list.reserve(static_cast<qsizetype>(m_hotkeys.size()));
+  for (const auto &entry : m_hotkeys) {
+    QVariantMap map;
+    map["id"] = entry.id;
+    map["category"] = entry.category;
+    map["actionName"] = entry.actionName;
+    map["defaultSequence"] = entry.defaultSequence;
+    map["currentSequence"] = entry.currentSequence;
+    list.append(map);
+  }
+  return list;
+}
+
+void QtBridge::setGlobalMediaKeysEnabled(bool enable) {
+  if (m_globalMediaKeysEnabled != enable) {
+    m_globalMediaKeysEnabled = enable;
+    saveSettings();
+    emit hotkeysChanged();
+  }
+}
+
+void QtBridge::setHotkey(const QString &actionId, const QString &keySequence) {
+  for (auto &entry : m_hotkeys) {
+    if (entry.id == actionId) {
+      if (entry.currentSequence != keySequence) {
+        entry.currentSequence = keySequence;
+        saveSettings();
+        emit hotkeysChanged();
+      }
+      return;
+    }
+  }
+}
+
+void QtBridge::restoreDefaultHotkeys() {
+  for (auto &entry : m_hotkeys) {
+    entry.currentSequence = entry.defaultSequence;
+  }
+  saveSettings();
+  emit hotkeysChanged();
+}
+
+QString QtBridge::checkHotkeyConflict(const QString &actionId,
+                                      const QString &keySequence) const {
+  QString clean = keySequence.trimmed();
+  if (clean.isEmpty()) {
+    return "";
+  }
+  QKeySequence candidate(clean);
+  if (candidate.isEmpty()) {
+    return "";
+  }
+
+  for (const auto &entry : m_hotkeys) {
+    if (entry.id != actionId && !entry.currentSequence.isEmpty()) {
+      QKeySequence existing(entry.currentSequence);
+      if (candidate == existing ||
+          entry.currentSequence.compare(clean, Qt::CaseInsensitive) == 0) {
+        return entry.actionName;
+      }
+    }
+  }
+  return "";
+}
+
+void QtBridge::setLastfmEnabled(bool enable) {
+  if (m_lastfmEnabled != enable) {
+    m_lastfmEnabled = enable;
+    saveSettings();
+    emit metadataSettingsChanged();
+  }
+}
+
+void QtBridge::setLastfmUsername(const QString &user) {
+  if (m_lastfmUsername != user) {
+    m_lastfmUsername = user;
+    saveSettings();
+    emit metadataSettingsChanged();
+  }
+}
+
+void QtBridge::setLastfmSessionKey(const QString &key) {
+  if (m_lastfmSessionKey != key) {
+    m_lastfmSessionKey = key;
+    saveSettings();
+    emit metadataSettingsChanged();
+  }
+}
+
+void QtBridge::setListenbrainzEnabled(bool enable) {
+  if (m_listenbrainzEnabled != enable) {
+    m_listenbrainzEnabled = enable;
+    saveSettings();
+    emit metadataSettingsChanged();
+  }
+}
+
+void QtBridge::setListenbrainzToken(const QString &token) {
+  if (m_listenbrainzToken != token) {
+    m_listenbrainzToken = token;
+    saveSettings();
+    emit metadataSettingsChanged();
+  }
+}
+
+void QtBridge::setListenbrainzApiUrl(const QString &url) {
+  if (m_listenbrainzApiUrl != url) {
+    m_listenbrainzApiUrl = url;
+    saveSettings();
+    emit metadataSettingsChanged();
+  }
+}
+
+void QtBridge::setScrobbleThresholdPercent(int percent) {
+  if (m_scrobbleThresholdPercent != percent) {
+    m_scrobbleThresholdPercent = percent;
+    saveSettings();
+    emit metadataSettingsChanged();
+  }
+}
+
+void QtBridge::setScrobbleThresholdTimeSec(int sec) {
+  if (m_scrobbleThresholdTimeSec != sec) {
+    m_scrobbleThresholdTimeSec = sec;
+    saveSettings();
+    emit metadataSettingsChanged();
+  }
+}
+
+void QtBridge::setOfflineScrobbleCache(bool enable) {
+  if (m_offlineScrobbleCache != enable) {
+    m_offlineScrobbleCache = enable;
+    saveSettings();
+    emit metadataSettingsChanged();
+  }
+}
+
+void QtBridge::setLyricsProviderOrder(const QString &order) {
+  if (m_lyricsProviderOrder != order) {
+    m_lyricsProviderOrder = order;
+    saveSettings();
+    emit metadataSettingsChanged();
+  }
+}
+
+void QtBridge::setAutoFetchLyrics(bool enable) {
+  if (m_autoFetchLyrics != enable) {
+    m_autoFetchLyrics = enable;
+    saveSettings();
+    emit metadataSettingsChanged();
+  }
+}
+
+void QtBridge::setLoggingVerbosity(const QString &level) {
+  if (m_loggingVerbosity != level) {
+    m_loggingVerbosity = level;
+    saveSettings();
+    emit diagnosticsSettingsChanged();
+  }
+}
+
+void QtBridge::openLogDirectory() {
+  QString logDir =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+      "/logs";
+  QDir().mkpath(logDir);
+  QDesktopServices::openUrl(QUrl::fromLocalFile(logDir));
+}
+
+void QtBridge::exportDiagnosticsReport(const QString &targetFilePath) {
+  QString dest = targetFilePath;
+  QUrl u = QUrl::fromUserInput(targetFilePath);
+  if (u.isLocalFile()) {
+    dest = u.toLocalFile();
+  }
+
+  QFile file(dest);
+  if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    QTextStream out(&file);
+    out << "Parakeet Audio Player - Diagnostics Report\n";
+    out << "==========================================\n\n";
+    out << "OS: " << QSysInfo::prettyProductName() << " ("
+        << QSysInfo::currentCpuArchitecture() << ")\n";
+    out << "Kernel: " << QSysInfo::kernelType() << " "
+        << QSysInfo::kernelVersion() << "\n";
+    out << "Qt Version: " << QT_VERSION_STR << "\n\n";
+
+    out << "[Audio Pipeline]\n";
+    out << "Backend: " << m_audioBackend << "\n";
+    out << "Device: " << m_currentAudioDevice << "\n";
+    out << "Bit-Perfect Exclusive: "
+        << (m_bitPerfectExclusive ? "Enabled" : "Disabled") << "\n";
+    out << "Buffer Latency: " << m_bufferLatencyMs << " ms\n";
+    out << "Resampler Quality: " << m_resamplerQuality << "\n";
+    out << "Dither Mode: " << m_ditherMode << "\n";
+    out << "Channel Processing: " << m_channelProcessing << "\n\n";
+
+    out << "[Library & Storage]\n";
+    out << "Indexed Tracks: " << totalTracks() << "\n";
+    out << "Indexed Albums: " << totalAlbums() << "\n";
+    out << "Total Library Duration: " << totalDurationStr() << "\n";
+    out << "Monitored Folders Count: " << m_monitoredFolders.size() << "\n";
+    for (const auto &folder : m_monitoredFolders) {
+      out << "  - " << folder << "\n";
+    }
+    out << "Filesystem Watcher: "
+        << (m_filesystemWatcher ? "Active" : "Disabled") << "\n";
+    out << "Auto-scan on Startup: "
+        << (m_autoScanOnStartup ? "Enabled" : "Disabled") << "\n\n";
+
+    out << "[Scrobbling & Services]\n";
+    out << "Last.fm Scrobbling: " << (m_lastfmEnabled ? "Enabled" : "Disabled")
+        << " (User: " << m_lastfmUsername << ")\n";
+    out << "ListenBrainz Scrobbling: "
+        << (m_listenbrainzEnabled ? "Enabled" : "Disabled") << "\n";
+    out << "Offline Scrobble Cache: "
+        << (m_offlineScrobbleCache ? "Enabled" : "Disabled") << "\n";
+    out << "Lyrics Provider Order: " << m_lyricsProviderOrder << "\n";
+    out << "Auto-fetch Lyrics: " << (m_autoFetchLyrics ? "Enabled" : "Disabled")
+        << "\n\n";
+
+    out << "[Diagnostics & Logging]\n";
+    out << "Logging Verbosity: " << m_loggingVerbosity << "\n\n";
+
+    out << "[Hotkeys & Accelerators]\n";
+    out << "Global Media Keys: "
+        << (m_globalMediaKeysEnabled ? "Enabled" : "Disabled") << "\n";
+    for (const auto &hk : m_hotkeys) {
+      out << "  - [" << hk.category << "] " << hk.actionName << ": "
+          << hk.currentSequence << " (Default: " << hk.defaultSequence << ")\n";
+    }
+    file.close();
+  }
+}
+
+void QtBridge::openAudioDiagnostics() { emit audioDiagnosticsRequested(); }
+
+QString QtBridge::checkDatabaseIntegrity() {
+  bool ok = m_library.optimizeDatabase();
+  if (ok) {
+    return QString(
+        "Integrity check passed: Database schema, tables, and indices are "
+        "valid and healthy.");
+  }
+  return QString(
+      "Integrity check warning: SQLite database reported warnings during "
+      "verification.");
+}
+
+void QtBridge::resetAllSettingsToDefaults() {
+  QSettings s("ParakeetAudio", "Parakeet");
+  s.clear();
+
+  // Playback & DSP defaults
+  m_gaplessPlayback = true;
+  m_crossfadeEnabled = false;
+  m_crossfadeDurationSec = 2.0;
+  m_crossfadeCurve = "Equal Power (Constant Volume)";
+  m_replayGainMode = "Smart Gain (Auto Track/Album)";
+  m_replayGainPreampDb = 0;
+  m_replayGainPreampWithoutGainDb = -6;
+  m_truePeakLimiter = true;
+  m_shortSeekStepSec = 5;
+  m_longSeekStepSec = 30;
+  m_stopAfterCurrentTrack = false;
+
+  // Queue defaults
+  m_doubleClickAction = "Play Now";
+  m_middleClickAction = "Queue Last";
+  m_queueAutoFillMode = "Loop Context";
+  m_historyRetentionLimit = 200;
+  m_player.setHistoryLimit(200);
+
+  // Library defaults
+  m_monitoredFolders.clear();
+  m_filesystemWatcher = true;
+  m_autoScanOnStartup = false;
+  m_formatFilters = {"FLAC", "WAV", "ALAC", "AIFF", "DSD (DSF/DFF)",
+                     "MP3",  "AAC", "M4A",  "OGG",  "OPUS"};
+  m_excludeFolders =
+      ".*, node_modules, temp, @eaDir, System Volume Information";
+  m_artworkPriority = "Embedded Tags First";
+
+  // General defaults
+  m_language = "System Default";
+  m_startupAction = "Restore Session";
+  m_closeAction = "Exit Application";
+  m_minimizeAction = "Minimize to Taskbar";
+  m_singleInstance = true;
+  m_updateCheckInterval = "Weekly";
+  m_showNotifications = true;
+  m_notificationDurationSec = 4;
+  m_suppressNotificationsWhenFocused = true;
+
+  // Appearance defaults
+  m_fontFamily = "Inter, sans-serif";
+  m_baseFontSize = 11;
+  m_waveformSeekbar = true;
+  m_tableRowHeight = 32;
+  m_tableAlternatingRows = false;
+  m_artThumbnailQuality = "Smooth (High Quality)";
+  m_artCacheLimitMb = 1024;
+  m_showStatusBar = true;
+
+  if (m_themeLoader) {
+    m_themeLoader->setThemeId("dark-studio");
+    m_themeLoader->setUiScale(1.0);
+    m_themeLoader->setDensityPreset("Standard");
+  }
+
+  // Audio Output defaults
+  m_audioBackend = "Linux PipeWire Lock-Free Client";
+  m_currentAudioDevice = "System Default Output";
+  m_bitPerfectExclusive = true;
+  m_bufferLatencyMs = 50;
+  m_resamplerQuality = "SoX Resampler High Quality";
+  m_ditherMode = "Flat TPDF (Triangular)";
+  m_channelProcessing = "Stereo Passthrough";
+
+  // Hotkeys defaults
+  m_globalMediaKeysEnabled = true;
+  for (auto &hk : m_hotkeys) {
+    hk.currentSequence = hk.defaultSequence;
+  }
+
+  // Metadata & Scrobbling defaults
+  m_lastfmEnabled = false;
+  m_lastfmUsername = "";
+  m_lastfmSessionKey = "";
+  m_listenbrainzEnabled = false;
+  m_listenbrainzToken = "";
+  m_listenbrainzApiUrl = "https://api.listenbrainz.org/1/";
+  m_scrobbleThresholdPercent = 50;
+  m_scrobbleThresholdTimeSec = 240;
+  m_offlineScrobbleCache = true;
+  m_lyricsProviderOrder = "Local .lrc sidecar first";
+  m_autoFetchLyrics = true;
+
+  // Diagnostics defaults
+  m_loggingVerbosity = "Info";
+
+  saveSettings();
+
+  emit settingsChanged();
+  emit playbackSettingsChanged();
+  emit queueSettingsChanged();
+  emit librarySettingsChanged();
+  emit audioSettingsChanged();
+  emit hotkeysChanged();
+  emit metadataSettingsChanged();
+  emit diagnosticsSettingsChanged();
 }

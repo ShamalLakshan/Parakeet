@@ -6,6 +6,8 @@
 #include <QString>
 #include <QStringList>
 #include <QTimer>
+#include <QVariantList>
+#include <QVariantMap>
 #include <atomic>
 #include <memory>
 #include <thread>
@@ -17,6 +19,17 @@
 #include "models/AlbumListModel.hpp"
 #include "models/TrackListModel.hpp"
 #include "theming/ThemeLoader.hpp"
+
+/**
+ * @brief Hotkey configuration entry mapping an action to key sequence.
+ */
+struct HotkeyEntry {
+  QString id;
+  QString category;
+  QString actionName;
+  QString defaultSequence;
+  QString currentSequence;
+};
 
 /**
  * @brief Bridge exposing player services, library data, and theme tokens to
@@ -216,6 +229,39 @@ class QtBridge : public QObject {
   Q_PROPERTY(QString channelProcessing READ channelProcessing WRITE
                  setChannelProcessing NOTIFY audioSettingsChanged)
 
+  // Settings (Hotkeys & Accelerators)
+  Q_PROPERTY(bool globalMediaKeysEnabled READ globalMediaKeysEnabled WRITE
+                 setGlobalMediaKeysEnabled NOTIFY hotkeysChanged)
+  Q_PROPERTY(QVariantList hotkeysModel READ hotkeysModel NOTIFY hotkeysChanged)
+
+  // Settings (Metadata & Scrobbling)
+  Q_PROPERTY(bool lastfmEnabled READ lastfmEnabled WRITE setLastfmEnabled NOTIFY
+                 metadataSettingsChanged)
+  Q_PROPERTY(QString lastfmUsername READ lastfmUsername WRITE setLastfmUsername
+                 NOTIFY metadataSettingsChanged)
+  Q_PROPERTY(QString lastfmSessionKey READ lastfmSessionKey WRITE
+                 setLastfmSessionKey NOTIFY metadataSettingsChanged)
+  Q_PROPERTY(bool listenbrainzEnabled READ listenbrainzEnabled WRITE
+                 setListenbrainzEnabled NOTIFY metadataSettingsChanged)
+  Q_PROPERTY(QString listenbrainzToken READ listenbrainzToken WRITE
+                 setListenbrainzToken NOTIFY metadataSettingsChanged)
+  Q_PROPERTY(QString listenbrainzApiUrl READ listenbrainzApiUrl WRITE
+                 setListenbrainzApiUrl NOTIFY metadataSettingsChanged)
+  Q_PROPERTY(int scrobbleThresholdPercent READ scrobbleThresholdPercent WRITE
+                 setScrobbleThresholdPercent NOTIFY metadataSettingsChanged)
+  Q_PROPERTY(int scrobbleThresholdTimeSec READ scrobbleThresholdTimeSec WRITE
+                 setScrobbleThresholdTimeSec NOTIFY metadataSettingsChanged)
+  Q_PROPERTY(bool offlineScrobbleCache READ offlineScrobbleCache WRITE
+                 setOfflineScrobbleCache NOTIFY metadataSettingsChanged)
+  Q_PROPERTY(QString lyricsProviderOrder READ lyricsProviderOrder WRITE
+                 setLyricsProviderOrder NOTIFY metadataSettingsChanged)
+  Q_PROPERTY(bool autoFetchLyrics READ autoFetchLyrics WRITE setAutoFetchLyrics
+                 NOTIFY metadataSettingsChanged)
+
+  // Settings (Diagnostics & Advanced)
+  Q_PROPERTY(QString loggingVerbosity READ loggingVerbosity WRITE
+                 setLoggingVerbosity NOTIFY diagnosticsSettingsChanged)
+
 public:
   explicit QtBridge(core::PlayerService &player, core::LibraryService &library,
                     adapters::ThemeLoader *themeLoader = nullptr,
@@ -396,6 +442,42 @@ public:
     return m_channelProcessing;
   }
 
+  // Hotkeys Settings Getters
+  [[nodiscard]] bool globalMediaKeysEnabled() const {
+    return m_globalMediaKeysEnabled;
+  }
+  [[nodiscard]] QVariantList hotkeysModel() const;
+
+  // Metadata & Scrobbling Settings Getters
+  [[nodiscard]] bool lastfmEnabled() const { return m_lastfmEnabled; }
+  [[nodiscard]] QString lastfmUsername() const { return m_lastfmUsername; }
+  [[nodiscard]] QString lastfmSessionKey() const { return m_lastfmSessionKey; }
+  [[nodiscard]] bool listenbrainzEnabled() const {
+    return m_listenbrainzEnabled;
+  }
+  [[nodiscard]] QString listenbrainzToken() const {
+    return m_listenbrainzToken;
+  }
+  [[nodiscard]] QString listenbrainzApiUrl() const {
+    return m_listenbrainzApiUrl;
+  }
+  [[nodiscard]] int scrobbleThresholdPercent() const {
+    return m_scrobbleThresholdPercent;
+  }
+  [[nodiscard]] int scrobbleThresholdTimeSec() const {
+    return m_scrobbleThresholdTimeSec;
+  }
+  [[nodiscard]] bool offlineScrobbleCache() const {
+    return m_offlineScrobbleCache;
+  }
+  [[nodiscard]] QString lyricsProviderOrder() const {
+    return m_lyricsProviderOrder;
+  }
+  [[nodiscard]] bool autoFetchLyrics() const { return m_autoFetchLyrics; }
+
+  // Diagnostics Settings Getters
+  [[nodiscard]] QString loggingVerbosity() const { return m_loggingVerbosity; }
+
   // QML-invokable actions
   Q_INVOKABLE void scanDirectory(const QString &folderPath);
   Q_INVOKABLE void purgeMissingTracks();
@@ -516,6 +598,139 @@ public:
   Q_INVOKABLE void setDitherMode(const QString &mode);
   Q_INVOKABLE void setChannelProcessing(const QString &mode);
 
+  // Hotkeys & Accelerators Settings
+  /**
+   * @brief Sets whether global media keys hook is enabled.
+   * @param enable True to capture media keys globally.
+   */
+  Q_INVOKABLE void setGlobalMediaKeysEnabled(bool enable);
+
+  /**
+   * @brief Rebinds a shortcut key sequence for a specific action.
+   * @param actionId Unique action identifier.
+   * @param keySequence New key sequence string.
+   */
+  Q_INVOKABLE void setHotkey(const QString &actionId,
+                             const QString &keySequence);
+
+  /**
+   * @brief Restores all hotkeys and keyboard accelerators to default sequences.
+   */
+  Q_INVOKABLE void restoreDefaultHotkeys();
+
+  /**
+   * @brief Checks if a proposed key sequence conflicts with an existing hotkey.
+   * @param actionId Action being edited (ignored during check).
+   * @param keySequence Proposed shortcut key sequence.
+   * @return Conflicting action name, or empty string if no conflict.
+   */
+  [[nodiscard]] Q_INVOKABLE QString checkHotkeyConflict(
+      const QString &actionId, const QString &keySequence) const;
+
+  // Metadata & Scrobbling Settings
+  /**
+   * @brief Sets whether Last.fm scrobbling integration is enabled.
+   * @param enable True to enable Last.fm.
+   */
+  Q_INVOKABLE void setLastfmEnabled(bool enable);
+
+  /**
+   * @brief Sets the Last.fm username.
+   * @param user Last.fm account username.
+   */
+  Q_INVOKABLE void setLastfmUsername(const QString &user);
+
+  /**
+   * @brief Sets the Last.fm session key for authenticated scrobbling.
+   * @param key Authenticated session key.
+   */
+  Q_INVOKABLE void setLastfmSessionKey(const QString &key);
+
+  /**
+   * @brief Sets whether ListenBrainz scrobbling integration is enabled.
+   * @param enable True to enable ListenBrainz.
+   */
+  Q_INVOKABLE void setListenbrainzEnabled(bool enable);
+
+  /**
+   * @brief Sets the user API token for ListenBrainz.
+   * @param token User API token.
+   */
+  Q_INVOKABLE void setListenbrainzToken(const QString &token);
+
+  /**
+   * @brief Sets the custom API URL for ListenBrainz instance.
+   * @param url ListenBrainz API root URL.
+   */
+  Q_INVOKABLE void setListenbrainzApiUrl(const QString &url);
+
+  /**
+   * @brief Sets the scrobble threshold percentage (50% - 100%).
+   * @param percent Track playback percentage before scrobble is submitted.
+   */
+  Q_INVOKABLE void setScrobbleThresholdPercent(int percent);
+
+  /**
+   * @brief Sets the scrobble threshold duration in seconds (30s - 300s).
+   * @param sec Maximum playback duration in seconds required before scrobble.
+   */
+  Q_INVOKABLE void setScrobbleThresholdTimeSec(int sec);
+
+  /**
+   * @brief Sets whether offline scrobbles are cached and synced upon reconnect.
+   * @param enable True to cache scrobbles offline.
+   */
+  Q_INVOKABLE void setOfflineScrobbleCache(bool enable);
+
+  /**
+   * @brief Sets the preferred priority order for synchronized lyrics lookup.
+   * @param order Priority mode name.
+   */
+  Q_INVOKABLE void setLyricsProviderOrder(const QString &order);
+
+  /**
+   * @brief Sets whether missing lyrics are fetched automatically online.
+   * @param enable True to auto-fetch missing lyrics.
+   */
+  Q_INVOKABLE void setAutoFetchLyrics(bool enable);
+
+  // Diagnostics & Advanced Settings
+  /**
+   * @brief Sets the diagnostics logging verbosity level.
+   * @param level Verbosity string ("Trace", "Debug", "Info", "Warning",
+   * "Error").
+   */
+  Q_INVOKABLE void setLoggingVerbosity(const QString &level);
+
+  /**
+   * @brief Opens the system file manager to the application logs directory.
+   */
+  Q_INVOKABLE void openLogDirectory();
+
+  /**
+   * @brief Exports a comprehensive diagnostic report to the specified file
+   * path.
+   * @param targetFilePath Destination file path or file URL.
+   */
+  Q_INVOKABLE void exportDiagnosticsReport(const QString &targetFilePath);
+
+  /**
+   * @brief Emits a request to open the real-time audio stream diagnostics view.
+   */
+  Q_INVOKABLE void openAudioDiagnostics();
+
+  /**
+   * @brief Runs an SQLite database integrity check and returns verification
+   * status.
+   * @return Status message describing database health.
+   */
+  Q_INVOKABLE QString checkDatabaseIntegrity();
+
+  /**
+   * @brief Resets all user settings and preferences to factory default values.
+   */
+  Q_INVOKABLE void resetAllSettingsToDefaults();
+
   // Maintenance Utilities
   Q_INVOKABLE void clearArtCache();
   Q_INVOKABLE void checkForUpdates();
@@ -537,12 +752,17 @@ signals:
   void librarySettingsChanged();
   void audioSettingsChanged();
   void audioDevicesChanged();
+  void hotkeysChanged();
+  void metadataSettingsChanged();
+  void diagnosticsSettingsChanged();
+  void audioDiagnosticsRequested();
 
 private:
   void setupPositionTimer();
   void updatePlaybackState(const core::Track &track);
   void refreshLibraryStats();
   void syncQueueModel();
+  void initDefaultHotkeys();
   void loadSettings();
   void saveSettings();
   static QString formatTime(qint64 ms);
@@ -660,6 +880,26 @@ private:
   QString m_resamplerQuality{"SoX Resampler High Quality"};
   QString m_ditherMode{"Flat TPDF (Triangular)"};
   QString m_channelProcessing{"Stereo Passthrough"};
+
+  // Hotkeys Settings
+  bool m_globalMediaKeysEnabled{true};
+  std::vector<HotkeyEntry> m_hotkeys;
+
+  // Metadata & Scrobbling Settings
+  bool m_lastfmEnabled{false};
+  QString m_lastfmUsername{""};
+  QString m_lastfmSessionKey{""};
+  bool m_listenbrainzEnabled{false};
+  QString m_listenbrainzToken{""};
+  QString m_listenbrainzApiUrl{"https://api.listenbrainz.org/1/"};
+  int m_scrobbleThresholdPercent{50};
+  int m_scrobbleThresholdTimeSec{240};
+  bool m_offlineScrobbleCache{true};
+  QString m_lyricsProviderOrder{"Local .lrc sidecar first"};
+  bool m_autoFetchLyrics{true};
+
+  // Diagnostics Settings
+  QString m_loggingVerbosity{"Info"};
 
   QMediaDevices *m_mediaDevices{nullptr};
   QTimer *m_positionTimer{nullptr};

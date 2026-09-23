@@ -5,6 +5,8 @@
 #include "core/services/PlayerService.hpp"
 #include "mocks/MockAudioEnginePort.hpp"
 #include <QCoreApplication>
+#include <QDir>
+#include <QFile>
 #include <QSettings>
 #include <gtest/gtest.h>
 
@@ -296,4 +298,122 @@ TEST_F(SettingsTest, LibrarySettingsGettersAndSetters) {
 
   // Database maintenance
   bridge.optimizeDatabase();
+}
+
+TEST_F(SettingsTest, HotkeysSettingsAndConflictDetection) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Global media keys
+  EXPECT_TRUE(bridge.globalMediaKeysEnabled());
+  bridge.setGlobalMediaKeysEnabled(false);
+  EXPECT_FALSE(bridge.globalMediaKeysEnabled());
+
+  // Hotkeys model
+  auto model = bridge.hotkeysModel();
+  EXPECT_FALSE(model.isEmpty());
+
+  // Conflict detection
+  EXPECT_EQ(bridge.checkHotkeyConflict("custom_action", "Space"),
+            "Play / Pause playback");
+  EXPECT_EQ(bridge.checkHotkeyConflict("play_pause", "Space"), "");
+  EXPECT_EQ(bridge.checkHotkeyConflict("custom_action", "Ctrl+Shift+Alt+Z"),
+            "");
+
+  // Rebind and restore
+  bridge.setHotkey("play_pause", "Ctrl+P");
+  EXPECT_EQ(bridge.checkHotkeyConflict("custom_action", "Ctrl+P"),
+            "Play / Pause playback");
+
+  bridge.restoreDefaultHotkeys();
+  EXPECT_EQ(bridge.checkHotkeyConflict("custom_action", "Space"),
+            "Play / Pause playback");
+}
+
+TEST_F(SettingsTest, MetadataAndScrobblingSettings) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Last.fm
+  bridge.setLastfmEnabled(true);
+  EXPECT_TRUE(bridge.lastfmEnabled());
+  bridge.setLastfmUsername("audiophile_user");
+  EXPECT_EQ(bridge.lastfmUsername(), "audiophile_user");
+  bridge.setLastfmSessionKey("session_token_12345");
+  EXPECT_EQ(bridge.lastfmSessionKey(), "session_token_12345");
+
+  // ListenBrainz
+  bridge.setListenbrainzEnabled(true);
+  EXPECT_TRUE(bridge.listenbrainzEnabled());
+  bridge.setListenbrainzToken("lb_api_key_abc");
+  EXPECT_EQ(bridge.listenbrainzToken(), "lb_api_key_abc");
+  bridge.setListenbrainzApiUrl("https://custom.listenbrainz.instance/api/");
+  EXPECT_EQ(bridge.listenbrainzApiUrl(),
+            "https://custom.listenbrainz.instance/api/");
+
+  // Thresholds & Cache
+  bridge.setScrobbleThresholdPercent(75);
+  EXPECT_EQ(bridge.scrobbleThresholdPercent(), 75);
+  bridge.setScrobbleThresholdTimeSec(180);
+  EXPECT_EQ(bridge.scrobbleThresholdTimeSec(), 180);
+  bridge.setOfflineScrobbleCache(false);
+  EXPECT_FALSE(bridge.offlineScrobbleCache());
+
+  // Lyrics
+  bridge.setLyricsProviderOrder("Embedded USLT/SYLT tags first");
+  EXPECT_EQ(bridge.lyricsProviderOrder(), "Embedded USLT/SYLT tags first");
+  bridge.setAutoFetchLyrics(false);
+  EXPECT_FALSE(bridge.autoFetchLyrics());
+}
+
+TEST_F(SettingsTest, DiagnosticsAndFactoryReset) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Logging verbosity
+  bridge.setLoggingVerbosity("Debug");
+  EXPECT_EQ(bridge.loggingVerbosity(), "Debug");
+
+  // Integrity check
+  QString integrityStatus = bridge.checkDatabaseIntegrity();
+  EXPECT_FALSE(integrityStatus.isEmpty());
+  EXPECT_TRUE(integrityStatus.contains("Integrity check passed"));
+
+  // Diagnostics report export
+  QString reportPath = QDir::tempPath() + "/parakeet_diag_test.txt";
+  bridge.exportDiagnosticsReport(reportPath);
+  EXPECT_TRUE(QFile::exists(reportPath));
+  QFile::remove(reportPath);
+
+  // Reset to defaults
+  bridge.setLanguage("Japanese");
+  bridge.setBaseFontSize(18);
+  bridge.setLastfmEnabled(true);
+  bridge.setLoggingVerbosity("Error");
+
+  bridge.resetAllSettingsToDefaults();
+
+  EXPECT_EQ(bridge.language(), "System Default");
+  EXPECT_EQ(bridge.baseFontSize(), 11);
+  EXPECT_FALSE(bridge.lastfmEnabled());
+  EXPECT_EQ(bridge.loggingVerbosity(), "Info");
+  EXPECT_TRUE(bridge.globalMediaKeysEnabled());
 }

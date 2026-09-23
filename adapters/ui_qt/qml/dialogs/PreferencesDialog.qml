@@ -207,6 +207,16 @@ Dialog {
         }
     }
 
+    FileDialog {
+        id: exportDiagnosticsDialog
+        title: "Export Diagnostics Report"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["Text Report (*.txt)", "All Files (*)"]
+        onAccepted: {
+            bridge.exportDiagnosticsReport(selectedFile.toString());
+        }
+    }
+
     FolderDialog {
         id: addFolderDialog
         title: "Add Folder to Monitored Music Folders"
@@ -246,6 +256,168 @@ Dialog {
         }
         onAccepted: {
             bridge.clearLibrary();
+        }
+    }
+
+    Dialog {
+        id: resetFactoryDefaultsDialog
+        title: "Reset All Preferences to Defaults"
+        modal: true
+        anchors.centerIn: parent
+        width: 420
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        background: Rectangle {
+            color: Theme.surface
+            border.color: Theme.panelBorder
+            border.width: 1
+            radius: Theme.cornerRadiusMedium
+        }
+        contentItem: ColumnLayout {
+            spacing: 12
+            Text {
+                text: "Are you sure you want to reset all settings?"
+                font.pixelSize: Theme.fontSizeBase
+                font.bold: true
+                color: Theme.textPrimary
+            }
+            Text {
+                text: "All application preferences, appearance themes, audio configurations, hotkeys, and scrobbling credentials will be reset to factory defaults."
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.textMuted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+        }
+        onAccepted: {
+            bridge.resetAllSettingsToDefaults();
+        }
+    }
+
+    property string editingActionId: ""
+    property string editingActionName: ""
+    property string editingKeySequence: ""
+    property string hotkeyConflictText: ""
+    property string dbIntegrityStatus: ""
+
+    Dialog {
+        id: rebindHotkeyDialog
+        title: "Rebind Shortcut"
+        modal: true
+        anchors.centerIn: parent
+        width: 440
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        background: Rectangle {
+            color: Theme.surface
+            border.color: Theme.panelBorder
+            border.width: 1
+            radius: Theme.cornerRadiusMedium
+        }
+        contentItem: ColumnLayout {
+            spacing: 12
+
+            Text {
+                text: "Rebinding action: " + root.editingActionName
+                font.pixelSize: Theme.fontSizeBase
+                font.bold: true
+                color: Theme.textPrimary
+            }
+
+            Text {
+                text: "Press any key combination to capture new shortcut:"
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.textSecondary
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
+                color: Theme.surfaceElevated
+                border.color: recorderInput.activeFocus ? Theme.accent : Theme.panelBorder
+                border.width: 1
+                radius: Theme.cornerRadiusSmall
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 8
+
+                    Text {
+                        text: root.editingKeySequence !== "" ? root.editingKeySequence : "Press shortcut keys..."
+                        font.pixelSize: Theme.fontSizeBase
+                        font.bold: true
+                        color: root.editingKeySequence !== "" ? Theme.accentHover : Theme.textMuted
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+
+                    StyledButton {
+                        text: "Clear"
+                        implicitHeight: 24
+                        onClicked: {
+                            root.editingKeySequence = ""
+                            root.hotkeyConflictText = ""
+                        }
+                    }
+                }
+
+                Item {
+                    id: recorderInput
+                    anchors.fill: parent
+                    focus: true
+                    Keys.onPressed: function(event) {
+                        if (event.key === Qt.Key_Control || event.key === Qt.Key_Shift ||
+                            event.key === Qt.Key_Alt || event.key === Qt.Key_Meta) {
+                            return;
+                        }
+                        var parts = []
+                        if (event.modifiers & Qt.ControlModifier) parts.push("Ctrl")
+                        if (event.modifiers & Qt.ShiftModifier) parts.push("Shift")
+                        if (event.modifiers & Qt.AltModifier) parts.push("Alt")
+                        if (event.modifiers & Qt.MetaModifier) parts.push("Meta")
+
+                        var keyText = ""
+                        if (event.key === Qt.Key_Space) keyText = "Space"
+                        else if (event.key === Qt.Key_Escape) keyText = "Escape"
+                        else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) keyText = "Return"
+                        else if (event.key === Qt.Key_Left) keyText = "Left"
+                        else if (event.key === Qt.Key_Right) keyText = "Right"
+                        else if (event.key === Qt.Key_Up) keyText = "Up"
+                        else if (event.key === Qt.Key_Down) keyText = "Down"
+                        else if (event.key === Qt.Key_Delete) keyText = "Del"
+                        else if (event.key >= Qt.Key_F1 && event.key <= Qt.Key_F12) keyText = "F" + (event.key - Qt.Key_F1 + 1)
+                        else if (event.text && event.text.length > 0 && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) <= 126) {
+                            keyText = event.text.toUpperCase()
+                        } else {
+                            keyText = String.fromCharCode(event.key)
+                        }
+
+                        if (keyText) {
+                            parts.push(keyText)
+                            var seq = parts.join("+")
+                            root.editingKeySequence = seq
+                            var conflict = bridge.checkHotkeyConflict(root.editingActionId, seq)
+                            if (conflict !== "") {
+                                root.hotkeyConflictText = "⚠️ Conflict: Already mapped to \"" + conflict + "\""
+                            } else {
+                                root.hotkeyConflictText = ""
+                            }
+                        }
+                        event.accepted = true
+                    }
+                }
+            }
+
+            Text {
+                text: root.hotkeyConflictText
+                visible: root.hotkeyConflictText !== ""
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                color: Theme.accentHover
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+        }
+        onAccepted: {
+            bridge.setHotkey(root.editingActionId, root.editingKeySequence);
         }
     }
 
@@ -326,8 +498,10 @@ Dialog {
                         { idx: 3, label: "Playback & DSP", icon: "equalizer" },
                         { idx: 4, label: "Queue Ergonomics", icon: "queue" },
                         { idx: 5, label: "Library & Folders", icon: "folder" },
-                        { idx: 6, label: "Plugins & Extensions", icon: "equalizer" },
-                        { idx: 7, label: "Keyboard Shortcuts", icon: "info" }
+                        { idx: 6, label: "Metadata & Scrobbling", icon: "settings" },
+                        { idx: 7, label: "Keyboard Shortcuts", icon: "info" },
+                        { idx: 8, label: "Diagnostics & Advanced", icon: "info" },
+                        { idx: 9, label: "Plugins & Extensions", icon: "equalizer" }
                     ]
 
                     delegate: Rectangle {
@@ -2319,11 +2493,596 @@ Dialog {
                 }
             }
 
-            // Plugins & Extensions
+            // Metadata & Scrobbling
             ScrollView {
                 anchors.fill: parent
                 anchors.margins: 20
                 visible: activeCategory === 6
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                clip: true
+
+                ColumnLayout {
+                    width: parent.width - 24
+                    spacing: 16
+
+                    Text {
+                        text: "Metadata & Scrobbling"
+                        font.pixelSize: Theme.fontSizeLarge
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // Last.fm
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: lastfmCol.implicitHeight + 24
+                        color: Theme.background
+                        border.color: Theme.panelBorder
+                        border.width: 1
+                        radius: Theme.cornerRadiusSmall
+
+                        ColumnLayout {
+                            id: lastfmCol
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 10
+
+                            StyledCheckBox {
+                                text: "Enable Last.fm Scrobbling"
+                                checked: bridge.lastfmEnabled
+                                onToggled: bridge.setLastfmEnabled(checked)
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+                                enabled: bridge.lastfmEnabled
+                                opacity: bridge.lastfmEnabled ? 1.0 : 0.5
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Text { text: "Username"; font.pixelSize: Theme.fontSizeSmall; color: Theme.textSecondary }
+                                    StyledTextField {
+                                        Layout.fillWidth: true
+                                        text: bridge.lastfmUsername
+                                        placeholderText: "Last.fm username"
+                                        onEditingFinished: bridge.setLastfmUsername(text)
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Text { text: "Session Key / Token"; font.pixelSize: Theme.fontSizeSmall; color: Theme.textSecondary }
+                                    StyledTextField {
+                                        Layout.fillWidth: true
+                                        text: bridge.lastfmSessionKey
+                                        placeholderText: "Session key"
+                                        echoMode: TextInput.PasswordEchoOnEdit
+                                        onEditingFinished: bridge.setLastfmSessionKey(text)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ListenBrainz
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: lbCol.implicitHeight + 24
+                        color: Theme.background
+                        border.color: Theme.panelBorder
+                        border.width: 1
+                        radius: Theme.cornerRadiusSmall
+
+                        ColumnLayout {
+                            id: lbCol
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 10
+
+                            StyledCheckBox {
+                                text: "Enable ListenBrainz Scrobbling"
+                                checked: bridge.listenbrainzEnabled
+                                onToggled: bridge.setListenbrainzEnabled(checked)
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+                                enabled: bridge.listenbrainzEnabled
+                                opacity: bridge.listenbrainzEnabled ? 1.0 : 0.5
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Text { text: "User API Token"; font.pixelSize: Theme.fontSizeSmall; color: Theme.textSecondary }
+                                    StyledTextField {
+                                        Layout.fillWidth: true
+                                        text: bridge.listenbrainzToken
+                                        placeholderText: "ListenBrainz user API token"
+                                        echoMode: TextInput.PasswordEchoOnEdit
+                                        onEditingFinished: bridge.setListenbrainzToken(text)
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Text { text: "API Base URL"; font.pixelSize: Theme.fontSizeSmall; color: Theme.textSecondary }
+                                    StyledTextField {
+                                        Layout.fillWidth: true
+                                        text: bridge.listenbrainzApiUrl
+                                        placeholderText: "https://api.listenbrainz.org/1/"
+                                        onEditingFinished: bridge.setListenbrainzApiUrl(text)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Scrobble Rules
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: rulesCol.implicitHeight + 24
+                        color: Theme.background
+                        border.color: Theme.panelBorder
+                        border.width: 1
+                        radius: Theme.cornerRadiusSmall
+
+                        ColumnLayout {
+                            id: rulesCol
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 12
+
+                            Text {
+                                text: "Scrobble Thresholds & Cache"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 16
+
+                                Text {
+                                    text: "Playback percentage trigger: " + bridge.scrobbleThresholdPercent + "%"
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.textSecondary
+                                    Layout.preferredWidth: 200
+                                }
+
+                                Slider {
+                                    Layout.fillWidth: true
+                                    from: 50
+                                    to: 100
+                                    stepSize: 5
+                                    value: bridge.scrobbleThresholdPercent
+                                    onMoved: bridge.setScrobbleThresholdPercent(Math.round(value))
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 16
+
+                                Text {
+                                    text: "Maximum elapsed time: " + bridge.scrobbleThresholdTimeSec + "s"
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.textSecondary
+                                    Layout.preferredWidth: 200
+                                }
+
+                                Slider {
+                                    Layout.fillWidth: true
+                                    from: 30
+                                    to: 300
+                                    stepSize: 10
+                                    value: bridge.scrobbleThresholdTimeSec
+                                    onMoved: bridge.setScrobbleThresholdTimeSec(Math.round(value))
+                                }
+                            }
+
+                            StyledCheckBox {
+                                text: "Offline Scrobble Cache (Queue scrobbles when offline and sync upon reconnect)"
+                                checked: bridge.offlineScrobbleCache
+                                onToggled: bridge.setOfflineScrobbleCache(checked)
+                            }
+                        }
+                    }
+
+                    // Lyrics & Extraction
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: lyricsCol.implicitHeight + 24
+                        color: Theme.background
+                        border.color: Theme.panelBorder
+                        border.width: 1
+                        radius: Theme.cornerRadiusSmall
+
+                        ColumnLayout {
+                            id: lyricsCol
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 10
+
+                            Text {
+                                text: "Lyrics & Tag Extraction"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+                                Text {
+                                    text: "Lyrics Provider Priority"
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.textSecondary
+                                    Layout.fillWidth: true
+                                }
+                                StyledComboBox {
+                                    model: [
+                                        "Local .lrc sidecar first",
+                                        "Embedded USLT/SYLT tags first",
+                                        "Online lyrics services"
+                                    ]
+                                    currentIndex: Math.max(0, model.indexOf(bridge.lyricsProviderOrder))
+                                    onActivated: bridge.setLyricsProviderOrder(currentText)
+                                }
+                            }
+
+                            StyledCheckBox {
+                                text: "Automatically fetch missing synchronized lyrics online"
+                                checked: bridge.autoFetchLyrics
+                                onToggled: bridge.setAutoFetchLyrics(checked)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Keyboard Shortcuts
+            ScrollView {
+                anchors.fill: parent
+                anchors.margins: 20
+                visible: activeCategory === 7
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                clip: true
+
+                ColumnLayout {
+                    width: parent.width - 24
+                    spacing: 14
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: "Keyboard Shortcuts & Hotkeys"
+                            font.pixelSize: Theme.fontSizeLarge
+                            font.bold: true
+                            color: Theme.textPrimary
+                        }
+                        Item { Layout.fillWidth: true }
+                        StyledButton {
+                            text: "Restore All Defaults"
+                            onClicked: bridge.restoreDefaultHotkeys()
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    StyledCheckBox {
+                        text: "Enable System-Wide Global Media Keys Hook (Play, Pause, Next, Prev)"
+                        checked: bridge.globalMediaKeysEnabled
+                        onToggled: bridge.setGlobalMediaKeysEnabled(checked)
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        StyledTextField {
+                            id: shortcutFilterInput
+                            Layout.fillWidth: true
+                            placeholderText: "Search shortcuts by name or key sequence..."
+                        }
+                    }
+
+                    // Hotkeys list table
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 340
+                        color: Theme.background
+                        border.color: Theme.panelBorder
+                        border.width: 1
+                        radius: Theme.cornerRadiusSmall
+                        clip: true
+
+                        ListView {
+                            id: hotkeysListView
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            clip: true
+                            boundsBehavior: Flickable.StopAtBounds
+                            model: bridge.hotkeysModel
+                            ScrollBar.vertical: ScrollBar { }
+
+                            delegate: Rectangle {
+                                width: hotkeysListView.width - 8
+                                height: visible ? 36 : 0
+                                radius: Theme.cornerRadiusSmall
+                                color: index % 2 === 0 ? "transparent" : Theme.surfaceElevated
+                                visible: {
+                                    var q = shortcutFilterInput.text.trim().toLowerCase();
+                                    if (!q) return true;
+                                    return modelData.actionName.toLowerCase().indexOf(q) !== -1 ||
+                                           modelData.category.toLowerCase().indexOf(q) !== -1 ||
+                                           modelData.currentSequence.toLowerCase().indexOf(q) !== -1;
+                                }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    spacing: 8
+
+                                    // Category badge
+                                    Rectangle {
+                                        Layout.preferredWidth: 105
+                                        Layout.preferredHeight: 20
+                                        radius: 3
+                                        color: Theme.selection
+                                        border.color: Theme.accent
+                                        border.width: 1
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modelData.category
+                                            font.pixelSize: 10
+                                            font.bold: true
+                                            color: Theme.accentHover
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    // Action name
+                                    Text {
+                                        text: modelData.actionName
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        color: Theme.textPrimary
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    // Key sequence chip
+                                    Rectangle {
+                                        Layout.preferredWidth: 110
+                                        Layout.preferredHeight: 22
+                                        radius: 3
+                                        color: Theme.surface
+                                        border.color: Theme.panelBorder
+                                        border.width: 1
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modelData.currentSequence !== "" ? modelData.currentSequence : "None"
+                                            font.pixelSize: Theme.fontSizeSmall
+                                            font.bold: true
+                                            color: Theme.accent
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    // Edit button
+                                    StyledButton {
+                                        text: "Edit"
+                                        implicitHeight: 24
+                                        implicitWidth: 50
+                                        onClicked: {
+                                            root.editingActionId = modelData.id
+                                            root.editingActionName = modelData.actionName
+                                            root.editingKeySequence = modelData.currentSequence
+                                            root.hotkeyConflictText = ""
+                                            rebindHotkeyDialog.open()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Diagnostics & Advanced
+            ScrollView {
+                anchors.fill: parent
+                anchors.margins: 20
+                visible: activeCategory === 8
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                clip: true
+
+                ColumnLayout {
+                    width: parent.width - 24
+                    spacing: 16
+
+                    Text {
+                        text: "Diagnostics & Advanced Settings"
+                        font.pixelSize: Theme.fontSizeLarge
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
+                    // Logging Card
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: logCol.implicitHeight + 24
+                        color: Theme.background
+                        border.color: Theme.panelBorder
+                        border.width: 1
+                        radius: Theme.cornerRadiusSmall
+
+                        ColumnLayout {
+                            id: logCol
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 10
+
+                            Text {
+                                text: "Logging & System Diagnostics"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+                                Text {
+                                    text: "Log Verbosity Level"
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.textSecondary
+                                    Layout.fillWidth: true
+                                }
+                                StyledComboBox {
+                                    model: ["Trace", "Debug", "Info", "Warning", "Error"]
+                                    currentIndex: Math.max(0, model.indexOf(bridge.loggingVerbosity))
+                                    onActivated: bridge.setLoggingVerbosity(currentText)
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 10
+
+                                StyledButton {
+                                    Layout.fillWidth: true
+                                    text: "Open Log Directory"
+                                    onClicked: bridge.openLogDirectory()
+                                }
+
+                                StyledButton {
+                                    Layout.fillWidth: true
+                                    text: "Export Diagnostics Report..."
+                                    onClicked: exportDiagnosticsDialog.open()
+                                }
+                            }
+                        }
+                    }
+
+                    // Audio & Database Health Card
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: healthCol.implicitHeight + 24
+                        color: Theme.background
+                        border.color: Theme.panelBorder
+                        border.width: 1
+                        radius: Theme.cornerRadiusSmall
+
+                        ColumnLayout {
+                            id: healthCol
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 10
+
+                            Text {
+                                text: "Database & Pipeline Health"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 10
+
+                                StyledButton {
+                                    Layout.fillWidth: true
+                                    text: "Run SQLite Integrity Check"
+                                    onClicked: {
+                                        root.dbIntegrityStatus = bridge.checkDatabaseIntegrity()
+                                    }
+                                }
+
+                                StyledButton {
+                                    Layout.fillWidth: true
+                                    text: "Audio Stream Diagnostics"
+                                    onClicked: bridge.openAudioDiagnostics()
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: integrityText.implicitHeight + 16
+                                visible: root.dbIntegrityStatus !== ""
+                                color: Theme.surfaceElevated
+                                border.color: Theme.accent
+                                border.width: 1
+                                radius: Theme.cornerRadiusSmall
+
+                                Text {
+                                    id: integrityText
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    text: root.dbIntegrityStatus
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.accentHover
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+                    }
+
+                    // Reset Settings Card
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: resetCol.implicitHeight + 24
+                        color: Theme.background
+                        border.color: Theme.panelBorder
+                        border.width: 1
+                        radius: Theme.cornerRadiusSmall
+
+                        ColumnLayout {
+                            id: resetCol
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 10
+
+                            Text {
+                                text: "Factory Defaults"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+
+                            Text {
+                                text: "Reset all application preferences, hotkeys, themes, and audio configurations to initial values."
+                                font.pixelSize: Theme.fontSizeSmall
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+
+                            StyledButton {
+                                Layout.fillWidth: true
+                                text: "Reset All Preferences to Factory Defaults..."
+                                onClicked: resetFactoryDefaultsDialog.open()
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Plugins & Extensions
+            ScrollView {
+                anchors.fill: parent
+                anchors.margins: 20
+                visible: activeCategory === 9
                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
                 clip: true
 
@@ -2362,80 +3121,6 @@ Dialog {
                                 Text { text: "FFT Audio Spectrum Analyzer using IVisualizerPlugin"; font.pixelSize: Theme.fontSizeSmall; color: Theme.textMuted }
                             }
                         }
-                    }
-                }
-            }
-
-            // Keyboard Shortcuts
-            ScrollView {
-                anchors.fill: parent
-                anchors.margins: 20
-                visible: activeCategory === 7
-                ScrollBar.vertical.policy: ScrollBar.AsNeeded
-                clip: true
-
-                ColumnLayout {
-                    width: parent.width - 24
-                    spacing: 12
-
-                    Text {
-                        text: "Keyboard Shortcuts & Accelerators"
-                        font.pixelSize: Theme.fontSizeLarge
-                        font.bold: true
-                        color: Theme.textPrimary
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
-
-                    GridLayout {
-                        columns: 2
-                        rowSpacing: 8
-                        columnSpacing: 24
-
-                        Text { text: "Space"; font.bold: true; color: Theme.accent }
-                        Text { text: "Play / Pause playback"; color: Theme.textSecondary }
-
-                        Text { text: "Ctrl + ,"; font.bold: true; color: Theme.accent }
-                        Text { text: "Open Preferences & Settings Dialog"; color: Theme.textSecondary }
-
-                        Text { text: "Ctrl + 1"; font.bold: true; color: Theme.accent }
-                        Text { text: "Toggle Left Library Explorer"; color: Theme.textSecondary }
-
-                        Text { text: "Ctrl + 2"; font.bold: true; color: Theme.accent }
-                        Text { text: "Toggle 3-Column Filter Browser"; color: Theme.textSecondary }
-
-                        Text { text: "Ctrl + 3"; font.bold: true; color: Theme.accent }
-                        Text { text: "Toggle Right Inspector / Queue"; color: Theme.textSecondary }
-
-                        Text { text: "Ctrl + Right"; font.bold: true; color: Theme.accent }
-                        Text { text: "Next track"; color: Theme.textSecondary }
-
-                        Text { text: "Ctrl + Left"; font.bold: true; color: Theme.accent }
-                        Text { text: "Previous track (Reversible History)"; color: Theme.textSecondary }
-
-                        Text { text: "Ctrl + Up / Down"; font.bold: true; color: Theme.accent }
-                        Text { text: "Volume adjust (+/- 5%)"; color: Theme.textSecondary }
-
-                        Text { text: "Ctrl + M"; font.bold: true; color: Theme.accent }
-                        Text { text: "Mute / Unmute audio"; color: Theme.textSecondary }
-
-                        Text { text: "Ctrl + S"; font.bold: true; color: Theme.accent }
-                        Text { text: "Cycle Shuffle mode (Off / Tracks / Albums)"; color: Theme.textSecondary }
-
-                        Text { text: "Ctrl + R"; font.bold: true; color: Theme.accent }
-                        Text { text: "Cycle Repeat mode (Off / All / One)"; color: Theme.textSecondary }
-
-                        Text { text: "Ctrl + F"; font.bold: true; color: Theme.accent }
-                        Text { text: "Focus Instant Search input"; color: Theme.textSecondary }
-
-                        Text { text: "Left / Right Arrow"; font.bold: true; color: Theme.accent }
-                        Text { text: "Seek 5 seconds backward / forward"; color: Theme.textSecondary }
-
-                        Text { text: "Shift + Left / Right"; font.bold: true; color: Theme.accent }
-                        Text { text: "Seek 30 seconds backward / forward"; color: Theme.textSecondary }
-
-                        Text { text: "Escape"; font.bold: true; color: Theme.accent }
-                        Text { text: "Clear filter / Close dialog"; color: Theme.textSecondary }
                     }
                 }
             }
