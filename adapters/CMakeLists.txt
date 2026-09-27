@@ -31,7 +31,10 @@ qt_add_qml_module(ui_adapter
         ui_qt/qml/VectorIcon.qml
         ui_qt/qml/components/Badge.qml
         ui_qt/qml/components/ContextMenu.qml
+        ui_qt/qml/components/EqualizerOverlay.qml
         ui_qt/qml/dialogs/PreferencesDialog.qml
+        ui_qt/qml/dialogs/TagEditorDialog.qml
+        ui_qt/qml/dialogs/OpenUrlDialog.qml
         ui_qt/qml/views/QueueView.qml
 )
 

@@ -44,6 +44,7 @@ class QtBridge : public QObject {
   Q_PROPERTY(
       TrackListModel *albumDetailTrackModel READ albumDetailTrackModel CONSTANT)
   Q_PROPERTY(TrackListModel *queueTrackModel READ queueTrackModel CONSTANT)
+  Q_PROPERTY(TrackListModel *historyTrackModel READ historyTrackModel CONSTANT)
 
   // Theming Engine
   Q_PROPERTY(adapters::ThemeLoader *theme READ theme CONSTANT)
@@ -262,6 +263,12 @@ class QtBridge : public QObject {
   Q_PROPERTY(QString loggingVerbosity READ loggingVerbosity WRITE
                  setLoggingVerbosity NOTIFY diagnosticsSettingsChanged)
 
+  // Undo / Redo
+  Q_PROPERTY(bool canUndo READ canUndo NOTIFY undoRedoChanged)
+  Q_PROPERTY(bool canRedo READ canRedo NOTIFY undoRedoChanged)
+  Q_PROPERTY(QString undoActionName READ undoActionName NOTIFY undoRedoChanged)
+  Q_PROPERTY(QString redoActionName READ redoActionName NOTIFY undoRedoChanged)
+
 public:
   explicit QtBridge(core::PlayerService &player, core::LibraryService &library,
                     adapters::ThemeLoader *themeLoader = nullptr,
@@ -276,6 +283,13 @@ public:
   [[nodiscard]] TrackListModel *queueTrackModel() const {
     return m_queueTrackModel;
   }
+  [[nodiscard]] TrackListModel *historyTrackModel() const {
+    return m_historyTrackModel;
+  }
+  [[nodiscard]] bool canUndo() const { return !m_undoStack.empty(); }
+  [[nodiscard]] bool canRedo() const { return !m_redoStack.empty(); }
+  [[nodiscard]] QString undoActionName() const;
+  [[nodiscard]] QString redoActionName() const;
   [[nodiscard]] adapters::ThemeLoader *theme() const { return m_themeLoader; }
 
   [[nodiscard]] QString currentTrackTitle() const {
@@ -533,6 +547,27 @@ public:
   Q_INVOKABLE void showInFileManager(const QString &filePath);
   Q_INVOKABLE void copyToClipboard(const QString &text);
 
+  // Desktop Menu & File Operations
+  Q_INVOKABLE void openAudioFile(const QString &filePath);
+  Q_INVOKABLE void openFolder(const QString &folderPath, bool enqueue = false);
+  Q_INVOKABLE void openCueSheet(const QString &cueFilePath);
+  Q_INVOKABLE void openNetworkStream(const QString &streamUrl,
+                                     const QString &streamName = QString());
+  Q_INVOKABLE bool exportActiveView(const QString &filePath,
+                                    const QString &format = QString());
+
+  // Edit & Undo Operations
+  Q_INVOKABLE void undo();
+  Q_INVOKABLE void redo();
+  void pushUndoCommand(const QString &name, std::function<void()> undoFn,
+                       std::function<void()> redoFn);
+  Q_INVOKABLE bool updateTrackTags(const QString &trackId,
+                                   const QVariantMap &tags);
+  Q_INVOKABLE bool updateMultipleTrackTags(const QStringList &trackIds,
+                                           const QVariantMap &tags);
+  Q_INVOKABLE void deleteSelectedTracks(const QStringList &trackIds);
+  Q_INVOKABLE void refreshHistory();
+
   // Playback & DSP Settings
   Q_INVOKABLE void setGaplessPlayback(bool enable);
   Q_INVOKABLE void setCrossfadeEnabled(bool enable);
@@ -756,6 +791,7 @@ signals:
   void metadataSettingsChanged();
   void diagnosticsSettingsChanged();
   void audioDiagnosticsRequested();
+  void undoRedoChanged();
 
 private:
   void setupPositionTimer();
@@ -768,6 +804,12 @@ private:
   static QString formatTime(qint64 ms);
   static QString formatBytes(uint64_t bytes);
 
+  struct UndoCommand {
+    QString name;
+    std::function<void()> undoFn;
+    std::function<void()> redoFn;
+  };
+
   core::PlayerService &m_player;
   core::LibraryService &m_library;
   adapters::ThemeLoader *m_themeLoader{nullptr};
@@ -776,6 +818,10 @@ private:
   TrackListModel *m_trackModel{nullptr};
   TrackListModel *m_albumDetailTrackModel{nullptr};
   TrackListModel *m_queueTrackModel{nullptr};
+  TrackListModel *m_historyTrackModel{nullptr};
+
+  std::vector<UndoCommand> m_undoStack;
+  std::vector<UndoCommand> m_redoStack;
 
   // Playback state (idle by default)
   QString m_currentTrackTitle{"No Track Selected"};

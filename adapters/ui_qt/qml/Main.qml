@@ -21,15 +21,103 @@ ApplicationWindow {
     property bool showRightPanel: true
     property bool showColumnBrowser: true
     property bool showStatusBar: true
-    property int mainViewMode: 1 // 0: Album Grid, 1: Track Details Table, 2: Album & Tracks View
+    property bool showEqualizer: false
+    property bool isMiniPlayer: false
+    property real normalWidth: 1400
+    property real normalHeight: 840
+    property int mainViewMode: 1 // 0: Album Grid, 1: Track Details Table, 2: Album & Tracks View, 3: Listening History
     property int activeNavSection: 0 // 0: All Tracks, 1: Albums, 2: Artists, 3: Genres, 4: Now Playing
     property string activeLetterFilter: "All"
     property string selectedGenreFilter: "All"
     property string selectedArtistFilter: "All"
     property int rightPanelTab: 0 // 0: Properties, 1: Queue
 
+    function toggleMiniPlayer() {
+        if (!isMiniPlayer) {
+            normalWidth = root.width;
+            normalHeight = root.height;
+            root.minimumWidth = 380;
+            root.minimumHeight = 120;
+            root.width = 440;
+            root.height = 140;
+            isMiniPlayer = true;
+        } else {
+            root.minimumWidth = 1024;
+            root.minimumHeight = 640;
+            root.width = Math.max(1024, normalWidth);
+            root.height = Math.max(640, normalHeight);
+            isMiniPlayer = false;
+        }
+    }
+
+    function toggleFullscreen() {
+        if (root.visibility === Window.FullScreen) {
+            root.visibility = Window.Windowed;
+        } else {
+            root.visibility = Window.FullScreen;
+        }
+    }
+
+    function zoomIn() {
+        Theme.uiScale = Math.min(1.5, Math.round((Theme.uiScale + 0.1) * 10) / 10);
+    }
+
+    function zoomOut() {
+        Theme.uiScale = Math.max(0.7, Math.round((Theme.uiScale - 0.1) * 10) / 10);
+    }
+
+    function zoomReset() {
+        Theme.uiScale = 1.0;
+    }
+
     PreferencesDialog {
         id: preferencesDialog
+    }
+
+    TagEditorDialog {
+        id: tagEditorDialog
+    }
+
+    OpenUrlDialog {
+        id: openUrlDialog
+    }
+
+    FileDialog {
+        id: openAudioFileDialog
+        title: "Open Audio File"
+        nameFilters: ["Audio files (*.mp3 *.flac *.wav *.ogg *.opus *.m4a *.aac *.alac *.aiff *.ape *.wv *.dsf *.dff)", "All files (*)"]
+        onAccepted: bridge.openAudioFile(selectedFile.toString())
+    }
+
+    FolderDialog {
+        id: openMusicFolderDialog
+        title: "Open Music Folder"
+        onAccepted: bridge.openFolder(selectedFolder.toString(), false)
+    }
+
+    FileDialog {
+        id: openCueSheetDialog
+        title: "Open CUE Sheet"
+        nameFilters: ["CUE Sheet files (*.cue)", "All files (*)"]
+        onAccepted: bridge.openCueSheet(selectedFile.toString())
+    }
+
+    FileDialog {
+        id: exportViewDialog
+        title: "Export Active View / Playlist"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["M3U8 Playlist (*.m3u8)", "CSV Spreadsheet (*.csv)", "JSON Data (*.json)"]
+        onAccepted: {
+            var path = selectedFile.toString();
+            var lower = path.toLowerCase();
+            var fmt = "m3u8";
+            if (lower.indexOf(".csv") !== -1) {
+                fmt = "csv";
+            } else if (lower.indexOf(".json") !== -1) {
+                fmt = "json";
+            }
+            bridge.exportActiveView(path, fmt);
+        }
     }
 
     ContextMenu {
@@ -39,6 +127,26 @@ ApplicationWindow {
             showRightPanel = true;
             rightPanelTab = 0;
         }
+        onEditTagsRequested: (track) => {
+            var sel = bridge.trackModel.getSelectedTracks();
+            if (sel.length > 1) {
+                tagEditorDialog.targetTracks = sel;
+                tagEditorDialog.targetTrack = sel[0];
+            } else {
+                tagEditorDialog.targetTracks = [];
+                tagEditorDialog.targetTrack = track;
+            }
+            tagEditorDialog.open();
+        }
+        onDeleteTracksRequested: (tracks) => {
+            var ids = [];
+            for (var i = 0; i < tracks.length; ++i) {
+                if (tracks[i].id) ids.push(tracks[i].id);
+            }
+            if (ids.length > 0) {
+                bridge.deleteSelectedTracks(ids);
+            }
+        }
     }
 
     ContextMenu {
@@ -46,12 +154,8 @@ ApplicationWindow {
         menuType: "explorer"
     }
 
-    // Keyboard shortcuts
+    // Keyboard shortcuts - Playback Transport
     Shortcut { sequence: "Space"; onActivated: bridge.togglePlayPause() }
-    Shortcut { sequence: "Ctrl+,"; onActivated: preferencesDialog.open() }
-    Shortcut { sequence: "Ctrl+1"; onActivated: showLeftPanel = !showLeftPanel }
-    Shortcut { sequence: "Ctrl+2"; onActivated: showColumnBrowser = !showColumnBrowser }
-    Shortcut { sequence: "Ctrl+3"; onActivated: showRightPanel = !showRightPanel }
     Shortcut { sequence: "Ctrl+Right"; onActivated: bridge.nextTrack() }
     Shortcut { sequence: "Ctrl+Left"; onActivated: bridge.previousTrack() }
     Shortcut { sequence: "Ctrl+Up"; onActivated: bridge.setVolume(bridge.volume + 0.05) }
@@ -60,13 +164,97 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+S"; onActivated: bridge.cycleShuffleMode() }
     Shortcut { sequence: "Ctrl+R"; onActivated: bridge.cycleRepeatMode() }
     Shortcut { sequence: "Ctrl+."; onActivated: bridge.stop() }
-    Shortcut { sequence: "Ctrl+F"; onActivated: searchTextInput.forceActiveFocus() }
     Shortcut { sequence: "Left"; onActivated: bridge.seek(bridge.positionMs - 5000) }
     Shortcut { sequence: "Right"; onActivated: bridge.seek(bridge.positionMs + 5000) }
     Shortcut { sequence: "Shift+Left"; onActivated: bridge.seek(bridge.positionMs - 30000) }
     Shortcut { sequence: "Shift+Right"; onActivated: bridge.seek(bridge.positionMs + 30000) }
+
+    // Keyboard shortcuts - File Operations
+    Shortcut { sequence: "Ctrl+O"; onActivated: openAudioFileDialog.open() }
+    Shortcut { sequence: "Ctrl+Shift+O"; onActivated: openMusicFolderDialog.open() }
+    Shortcut { sequence: "Ctrl+U"; onActivated: openUrlDialog.open() }
+    Shortcut { sequence: "Ctrl+E"; onActivated: exportViewDialog.open() }
+    Shortcut { sequence: "Ctrl+,"; onActivated: preferencesDialog.open() }
+    Shortcut { sequence: "Ctrl+W"; onActivated: root.hide() }
     Shortcut { sequence: "Ctrl+Q"; onActivated: Qt.quit() }
-    Shortcut { sequence: "Escape"; onActivated: { searchTextInput.text = ""; bridge.search(""); } }
+
+    // Keyboard shortcuts - Edit & Selection Operations
+    Shortcut { sequence: "Ctrl+Z"; onActivated: bridge.undo() }
+    Shortcut { sequence: "Ctrl+Y"; onActivated: bridge.redo() }
+    Shortcut { sequence: "Ctrl+Shift+Z"; onActivated: bridge.redo() }
+    Shortcut { sequence: "Ctrl+A"; onActivated: bridge.trackModel.selectAll() }
+    Shortcut { sequence: "Ctrl+Shift+A"; onActivated: bridge.trackModel.invertSelection() }
+    Shortcut { sequence: "Ctrl+F"; onActivated: { searchTextInput.forceActiveFocus(); searchTextInput.selectAll(); } }
+    Shortcut { sequence: "Shift+Escape"; onActivated: { searchTextInput.text = ""; bridge.search(""); } }
+    Shortcut {
+        sequence: "Ctrl+T"
+        onActivated: {
+            var sel = bridge.trackModel.getSelectedTracks();
+            if (sel.length > 0) {
+                tagEditorDialog.targetTracks = sel.length > 1 ? sel : [];
+                tagEditorDialog.targetTrack = sel[0];
+                tagEditorDialog.open();
+            }
+        }
+    }
+    Shortcut {
+        sequence: "Delete"
+        onActivated: {
+            var ids = bridge.trackModel.getSelectedTrackIds();
+            if (ids.length > 0) {
+                bridge.deleteSelectedTracks(ids);
+            }
+        }
+    }
+    Shortcut {
+        sequence: "Escape"
+        onActivated: {
+            if (bridge.trackModel.selectedCount > 0) {
+                bridge.trackModel.clearSelection();
+            } else if (searchTextInput.text.length > 0) {
+                searchTextInput.text = "";
+                bridge.search("");
+            }
+        }
+    }
+
+    // Keyboard shortcuts - View & Layout Navigation
+    Shortcut { sequence: "Ctrl+1"; onActivated: showLeftPanel = !showLeftPanel }
+    Shortcut { sequence: "Ctrl+2"; onActivated: showColumnBrowser = !showColumnBrowser }
+    Shortcut {
+        sequence: "Ctrl+3"
+        onActivated: {
+            if (!showRightPanel || rightPanelTab !== 0) {
+                showRightPanel = true;
+                rightPanelTab = 0;
+            } else {
+                showRightPanel = false;
+            }
+        }
+    }
+    Shortcut {
+        sequence: "Ctrl+4"
+        onActivated: {
+            if (!showRightPanel || rightPanelTab !== 1) {
+                showRightPanel = true;
+                rightPanelTab = 1;
+            } else {
+                showRightPanel = false;
+            }
+        }
+    }
+    Shortcut { sequence: "Ctrl+5"; onActivated: showEqualizer = !showEqualizer }
+    Shortcut { sequence: "Alt+1"; onActivated: mainViewMode = 1 }
+    Shortcut { sequence: "Alt+2"; onActivated: mainViewMode = 0 }
+    Shortcut { sequence: "Alt+3"; onActivated: mainViewMode = 2 }
+    Shortcut { sequence: "Alt+4"; onActivated: { bridge.refreshHistory(); mainViewMode = 3; } }
+    Shortcut { sequence: "Ctrl+Shift+M"; onActivated: toggleMiniPlayer() }
+    Shortcut { sequence: "F10"; onActivated: toggleMiniPlayer() }
+    Shortcut { sequence: "F11"; onActivated: toggleFullscreen() }
+    Shortcut { sequence: "Ctrl+="; onActivated: zoomIn() }
+    Shortcut { sequence: "Ctrl++"; onActivated: zoomIn() }
+    Shortcut { sequence: "Ctrl+-"; onActivated: zoomOut() }
+    Shortcut { sequence: "Ctrl+0"; onActivated: zoomReset() }
 
     FolderDialog {
         id: folderDialog
@@ -80,6 +268,7 @@ ApplicationWindow {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+        visible: !isMiniPlayer
 
         // Menu bar and status
         Rectangle {
@@ -141,14 +330,35 @@ ApplicationWindow {
                             id: fileMenu
                             y: parent.height
                             MenuItem {
+                                text: "Open Audio File... (Ctrl+O)"
+                                onTriggered: openAudioFileDialog.open()
+                            }
+                            MenuItem {
+                                text: "Open Folder... (Ctrl+Shift+O)"
+                                onTriggered: openMusicFolderDialog.open()
+                            }
+                            MenuItem {
+                                text: "Open URL / Network Stream... (Ctrl+U)"
+                                onTriggered: openUrlDialog.open()
+                            }
+                            MenuItem {
+                                text: "Open CUE Sheet..."
+                                onTriggered: openCueSheetDialog.open()
+                            }
+                            MenuSeparator {}
+                            MenuItem {
                                 text: "Add Folder to Library..."
                                 onTriggered: folderDialog.open()
                             }
                             MenuItem {
-                                text: "Preferences / Settings (Ctrl+,)"
-                                onTriggered: preferencesDialog.open()
+                                text: "Export Active View / Playlist... (Ctrl+E)"
+                                onTriggered: exportViewDialog.open()
                             }
                             MenuSeparator {}
+                            MenuItem {
+                                text: "Preferences / Settings... (Ctrl+,)"
+                                onTriggered: preferencesDialog.open()
+                            }
                             MenuItem {
                                 text: "Purge Missing / Dead Files"
                                 onTriggered: bridge.purgeMissingTracks()
@@ -159,8 +369,100 @@ ApplicationWindow {
                             }
                             MenuSeparator {}
                             MenuItem {
+                                text: "Minimize to System Tray (Ctrl+W)"
+                                onTriggered: root.hide()
+                            }
+                            MenuItem {
                                 text: "Exit (Ctrl+Q)"
                                 onTriggered: Qt.quit()
+                            }
+                        }
+                    }
+
+                    // Edit Menu Button
+                    Rectangle {
+                        width: editMenuText.implicitWidth + 14
+                        height: 22
+                        radius: 3
+                        color: editMenuMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+                        Text {
+                            id: editMenuText
+                            anchors.centerIn: parent
+                            text: "Edit"
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.textSecondary
+                        }
+                        MouseArea {
+                            id: editMenuMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: editMenu.open()
+                        }
+                        Menu {
+                            id: editMenu
+                            y: parent.height
+                            MenuItem {
+                                text: bridge.undoActionName.length > 0 ? ("Undo " + bridge.undoActionName + " (Ctrl+Z)") : "Undo (Ctrl+Z)"
+                                enabled: bridge.canUndo
+                                onTriggered: bridge.undo()
+                            }
+                            MenuItem {
+                                text: bridge.redoActionName.length > 0 ? ("Redo " + bridge.redoActionName + " (Ctrl+Y)") : "Redo (Ctrl+Y)"
+                                enabled: bridge.canRedo
+                                onTriggered: bridge.redo()
+                            }
+                            MenuSeparator {}
+                            MenuItem {
+                                text: "Select All (Ctrl+A)"
+                                onTriggered: bridge.trackModel.selectAll()
+                            }
+                            MenuItem {
+                                text: "Invert Selection (Ctrl+Shift+A)"
+                                onTriggered: bridge.trackModel.invertSelection()
+                            }
+                            MenuItem {
+                                text: "Clear Selection (Esc)"
+                                enabled: bridge.trackModel.selectedCount > 0
+                                onTriggered: bridge.trackModel.clearSelection()
+                            }
+                            MenuSeparator {}
+                            MenuItem {
+                                text: "Find / Instant Search (Ctrl+F)"
+                                onTriggered: {
+                                    searchTextInput.forceActiveFocus();
+                                    searchTextInput.selectAll();
+                                }
+                            }
+                            MenuItem {
+                                text: "Clear Search Filter (Shift+Esc)"
+                                onTriggered: {
+                                    searchTextInput.text = "";
+                                    bridge.search("");
+                                }
+                            }
+                            MenuSeparator {}
+                            MenuItem {
+                                text: "Edit Track Tags... (Ctrl+T)"
+                                enabled: bridge.trackModel.selectedCount > 0
+                                onTriggered: {
+                                    var sel = bridge.trackModel.getSelectedTracks();
+                                    if (sel.length > 0) {
+                                        tagEditorDialog.targetTracks = sel.length > 1 ? sel : [];
+                                        tagEditorDialog.targetTrack = sel[0];
+                                        tagEditorDialog.open();
+                                    }
+                                }
+                            }
+                            MenuItem {
+                                text: "Delete Selected Tracks (Delete)"
+                                enabled: bridge.trackModel.selectedCount > 0
+                                onTriggered: {
+                                    var ids = bridge.trackModel.getSelectedTrackIds();
+                                    if (ids.length > 0) {
+                                        bridge.deleteSelectedTracks(ids);
+                                    }
+                                }
                             }
                         }
                     }
@@ -197,27 +499,140 @@ ApplicationWindow {
                                 onTriggered: showColumnBrowser = !showColumnBrowser
                             }
                             MenuItem {
-                                text: (showRightPanel ? "Hide" : "Show") + " Right Inspector (Ctrl+3)"
-                                onTriggered: showRightPanel = !showRightPanel
+                                text: (showRightPanel && rightPanelTab === 0 ? "Hide" : "Show") + " Audio Specs Inspector (Ctrl+3)"
+                                onTriggered: {
+                                    if (!showRightPanel || rightPanelTab !== 0) {
+                                        showRightPanel = true;
+                                        rightPanelTab = 0;
+                                    } else {
+                                        showRightPanel = false;
+                                    }
+                                }
+                            }
+                            MenuItem {
+                                text: (showRightPanel && rightPanelTab === 1 ? "Hide" : "Show") + " Up Next Play Queue (Ctrl+4)"
+                                onTriggered: {
+                                    if (!showRightPanel || rightPanelTab !== 1) {
+                                        showRightPanel = true;
+                                        rightPanelTab = 1;
+                                    } else {
+                                        showRightPanel = false;
+                                    }
+                                }
+                            }
+                            MenuItem {
+                                text: (showEqualizer ? "Hide" : "Show") + " Parametric Equalizer (Ctrl+5)"
+                                onTriggered: showEqualizer = !showEqualizer
                             }
                             MenuItem {
                                 text: (showStatusBar ? "Hide" : "Show") + " Bottom Status Bar"
+                                checkable: true
+                                checked: showStatusBar
                                 onTriggered: showStatusBar = !showStatusBar
                             }
                             MenuSeparator {}
                             Menu {
+                                title: "View Modes"
+                                MenuItem {
+                                    text: "Track Details Table (Alt+1)"
+                                    checkable: true
+                                    checked: mainViewMode === 1
+                                    onTriggered: mainViewMode = 1
+                                }
+                                MenuItem {
+                                    text: "Album Grid (Alt+2)"
+                                    checkable: true
+                                    checked: mainViewMode === 0
+                                    onTriggered: mainViewMode = 0
+                                }
+                                MenuItem {
+                                    text: "Album & Tracks View (Alt+3)"
+                                    checkable: true
+                                    checked: mainViewMode === 2
+                                    onTriggered: mainViewMode = 2
+                                }
+                                MenuItem {
+                                    text: "Listening History (Alt+4)"
+                                    checkable: true
+                                    checked: mainViewMode === 3
+                                    onTriggered: {
+                                        bridge.refreshHistory();
+                                        mainViewMode = 3;
+                                    }
+                                }
+                            }
+                            MenuItem {
+                                text: (isMiniPlayer ? "Restore Full Player" : "Mini-Player Mode") + " (Ctrl+Shift+M / F10)"
+                                onTriggered: toggleMiniPlayer()
+                            }
+                            MenuItem {
+                                text: (root.visibility === Window.FullScreen ? "Exit Fullscreen" : "Fullscreen") + " (F11)"
+                                onTriggered: toggleFullscreen()
+                            }
+                            MenuSeparator {}
+                            Menu {
+                                title: "Zoom UI"
+                                MenuItem {
+                                    text: "Zoom In (Ctrl++)"
+                                    onTriggered: zoomIn()
+                                }
+                                MenuItem {
+                                    text: "Zoom Out (Ctrl+-)"
+                                    onTriggered: zoomOut()
+                                }
+                                MenuItem {
+                                    text: "Reset Zoom (100%) (Ctrl+0)"
+                                    onTriggered: zoomReset()
+                                }
+                                MenuSeparator {}
+                                MenuItem {
+                                    text: "75%"
+                                    checkable: true
+                                    checked: Math.abs(Theme.uiScale - 0.75) < 0.04
+                                    onTriggered: Theme.uiScale = 0.75
+                                }
+                                MenuItem {
+                                    text: "90%"
+                                    checkable: true
+                                    checked: Math.abs(Theme.uiScale - 0.9) < 0.04
+                                    onTriggered: Theme.uiScale = 0.9
+                                }
+                                MenuItem {
+                                    text: "100% (Standard)"
+                                    checkable: true
+                                    checked: Math.abs(Theme.uiScale - 1.0) < 0.04
+                                    onTriggered: Theme.uiScale = 1.0
+                                }
+                                MenuItem {
+                                    text: "110%"
+                                    checkable: true
+                                    checked: Math.abs(Theme.uiScale - 1.1) < 0.04
+                                    onTriggered: Theme.uiScale = 1.1
+                                }
+                                MenuItem {
+                                    text: "125%"
+                                    checkable: true
+                                    checked: Math.abs(Theme.uiScale - 1.25) < 0.04
+                                    onTriggered: Theme.uiScale = 1.25
+                                }
+                                MenuItem {
+                                    text: "150%"
+                                    checkable: true
+                                    checked: Math.abs(Theme.uiScale - 1.5) < 0.04
+                                    onTriggered: Theme.uiScale = 1.5
+                                }
+                            }
+                            Menu {
+                                id: themesQuickMenu
                                 title: "Themes Quick Switch"
-                                MenuItem {
-                                    text: "Dark Studio (Default)"
-                                    onTriggered: bridge.theme.themeId = "dark-studio"
-                                }
-                                MenuItem {
-                                    text: "Nord Audiophile"
-                                    onTriggered: bridge.theme.themeId = "nord-audiophile"
-                                }
-                                MenuItem {
-                                    text: "Solarized Dark"
-                                    onTriggered: bridge.theme.themeId = "solarized-dark"
+                                Instantiator {
+                                    model: Theme.availableThemes
+                                    onObjectAdded: (index, object) => themesQuickMenu.insertItem(index, object)
+                                    onObjectRemoved: (index, object) => themesQuickMenu.removeItem(object)
+                                    delegate: MenuItem {
+                                        text: (modelData.name || modelData.id) + (Theme.themeId === modelData.id ? "  ✓" : "")
+                                        onTriggered: Theme.themeId = modelData.id
+                                    }
                                 }
                                 MenuSeparator {}
                                 MenuItem {
@@ -227,19 +642,6 @@ ApplicationWindow {
                                         preferencesDialog.open();
                                     }
                                 }
-                            }
-                            MenuSeparator {}
-                            MenuItem {
-                                text: "Track Details Table View"
-                                onTriggered: mainViewMode = 1
-                            }
-                            MenuItem {
-                                text: "Album Grid View"
-                                onTriggered: mainViewMode = 0
-                            }
-                            MenuItem {
-                                text: "Album & Tracks View"
-                                onTriggered: mainViewMode = 2
                             }
                         }
                     }
@@ -1417,7 +1819,7 @@ ApplicationWindow {
                                     delegate: Rectangle {
                                         width: trackTableListView.width
                                         height: 25
-                                        color: (bridge.currentFilePath === model.filePath) ? Theme.selection : (tableRowMouse.containsMouse ? Theme.surfaceElevated : (index % 2 === 0 ? Theme.surface : Theme.background))
+                                        color: model.isSelected ? Theme.selection : ((bridge.currentFilePath === model.filePath) ? Theme.surfaceElevated : (tableRowMouse.containsMouse ? Theme.surfaceElevated : (index % 2 === 0 ? Theme.surface : Theme.background)))
 
                                         RowLayout {
                                             anchors.fill: parent
@@ -1587,12 +1989,25 @@ ApplicationWindow {
                                             }
                                             onClicked: (mouse) => {
                                                 if (mouse.button === Qt.RightButton) {
-                                                    trackContextMenu.targetTrack = { id: model.id, title: model.title, artist: model.artist, filePath: model.filePath };
+                                                    if (!model.isSelected) {
+                                                        bridge.trackModel.clearSelection();
+                                                        bridge.trackModel.setRowSelected(index, true);
+                                                    }
+                                                    trackContextMenu.targetTrack = { id: model.id, title: model.title, artist: model.artist, filePath: model.filePath, album: model.album, genre: model.genre, year: model.year, trackNumber: model.trackNumber };
                                                     trackContextMenu.targetFilePath = model.filePath;
                                                     trackContextMenu.targetTitle = model.title;
                                                     trackContextMenu.targetArtist = model.artist;
                                                     trackContextMenu.popup();
                                                 } else {
+                                                    if (mouse.modifiers & Qt.ControlModifier) {
+                                                        bridge.trackModel.toggleSelection(index);
+                                                    } else if (mouse.modifiers & Qt.ShiftModifier) {
+                                                        bridge.trackModel.selectRange(trackTableListView.currentIndex >= 0 ? trackTableListView.currentIndex : 0, index);
+                                                    } else {
+                                                        bridge.trackModel.clearSelection();
+                                                        bridge.trackModel.setRowSelected(index, true);
+                                                        trackTableListView.currentIndex = index;
+                                                    }
                                                     bridge.openAlbumDetails(model.album, model.artist);
                                                 }
                                             }
@@ -1957,6 +2372,238 @@ ApplicationWindow {
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
                                             onDoubleClicked: bridge.playTrackFromDetail(index)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Listening History View
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        visible: mainViewMode === 3
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            spacing: 0
+
+                            // History Header
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 46
+                                color: Theme.surface
+                                border.color: Theme.panelBorder
+                                border.width: 1
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 16
+                                    anchors.rightMargin: 16
+                                    spacing: 12
+
+                                    VectorIcon {
+                                        name: "queue"
+                                        width: 16
+                                        height: 16
+                                        color: Theme.accent
+                                    }
+
+                                    ColumnLayout {
+                                        spacing: 2
+                                        Text {
+                                            text: "Listening History"
+                                            font.pixelSize: Theme.fontSizeLarge
+                                            font.bold: true
+                                            color: Theme.textPrimary
+                                        }
+                                        Text {
+                                            text: bridge.historyTrackModel.count + " tracks played in recent sessions"
+                                            font.pixelSize: 10
+                                            color: Theme.textMuted
+                                        }
+                                    }
+
+                                    Item { Layout.fillWidth: true }
+
+                                    // Clear History Button
+                                    Rectangle {
+                                        width: clearHistoryText.implicitWidth + 24
+                                        height: 28
+                                        radius: Theme.cornerRadiusSmall
+                                        color: clearHistoryMouse.containsMouse ? Theme.selection : Theme.surfaceElevated
+                                        border.color: Theme.panelBorder
+
+                                        RowLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 6
+                                            VectorIcon {
+                                                name: "clear"
+                                                width: 10
+                                                height: 10
+                                                color: Theme.textSecondary
+                                            }
+                                            Text {
+                                                id: clearHistoryText
+                                                text: "Clear History"
+                                                font.pixelSize: Theme.fontSizeSmall
+                                                color: Theme.textSecondary
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            id: clearHistoryMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                bridge.clearPlaybackHistory();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Table Header Row
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 26
+                                color: Theme.surfaceElevated
+                                border.color: Theme.panelBorder
+                                border.width: 1
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    spacing: 8
+
+                                    Item { Layout.preferredWidth: 28; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "#"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
+                                    Item { Layout.fillWidth: true; Layout.preferredWidth: 200; Layout.minimumWidth: 100; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "TITLE"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
+                                    Item { Layout.preferredWidth: 140; Layout.minimumWidth: 80; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "ARTIST"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
+                                    Item { Layout.preferredWidth: 140; Layout.minimumWidth: 80; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "ALBUM"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
+                                    Item { Layout.preferredWidth: 70; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "FORMAT"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
+                                    Item { Layout.preferredWidth: 45; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "TIME"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
+                                }
+                            }
+
+                            // History List
+                            ScrollView {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                                ListView {
+                                    id: historyListView
+                                    anchors.fill: parent
+                                    model: bridge.historyTrackModel
+                                    clip: true
+
+                                    delegate: Rectangle {
+                                        width: historyListView.width
+                                        height: 26
+                                        color: histRowMouse.containsMouse ? Theme.surfaceElevated : (index % 2 === 0 ? Theme.surface : Theme.background)
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 10
+                                            anchors.rightMargin: 10
+                                            spacing: 8
+
+                                            Item {
+                                                Layout.preferredWidth: 28
+                                                Layout.fillHeight: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: index + 1
+                                                    font.pixelSize: 10
+                                                    color: Theme.textMuted
+                                                }
+                                            }
+
+                                            Item {
+                                                Layout.fillWidth: true
+                                                Layout.preferredWidth: 200
+                                                Layout.minimumWidth: 100
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    text: model.title
+                                                    font.pixelSize: 11
+                                                    color: Theme.textPrimary
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            Item {
+                                                Layout.preferredWidth: 140
+                                                Layout.minimumWidth: 80
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    text: model.artist
+                                                    font.pixelSize: 11
+                                                    color: Theme.textSecondary
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            Item {
+                                                Layout.preferredWidth: 140
+                                                Layout.minimumWidth: 80
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    text: model.album
+                                                    font.pixelSize: 11
+                                                    color: Theme.textMuted
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            Item {
+                                                Layout.preferredWidth: 70
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: model.codec
+                                                    font.pixelSize: 10
+                                                    color: Theme.accent
+                                                }
+                                            }
+
+                                            Item {
+                                                Layout.preferredWidth: 45
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: model.durationFormatted
+                                                    font.pixelSize: 10
+                                                    color: Theme.textMuted
+                                                }
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            id: histRowMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onDoubleClicked: {
+                                                bridge.openAudioFile(model.filePath);
+                                            }
                                         }
                                     }
                                 }
@@ -2597,5 +3244,231 @@ ApplicationWindow {
                 }
             }
         }
+    }
+
+    // Mini-player mode layout
+    Rectangle {
+        id: miniPlayerContainer
+        anchors.fill: parent
+        visible: isMiniPlayer
+        color: Theme.background
+        clip: true
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 12
+
+            // Mini Album Art
+            Rectangle {
+                Layout.preferredWidth: 84
+                Layout.preferredHeight: 84
+                Layout.alignment: Qt.AlignVCenter
+                color: Theme.surface
+                border.color: Theme.panelBorder
+                radius: Theme.cornerRadiusSmall
+                clip: true
+
+                Image {
+                    anchors.fill: parent
+                    source: bridge.currentArtUrl
+                    fillMode: Image.PreserveAspectCrop
+                }
+            }
+
+            // Info and Controls
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 4
+
+                // Top: Track Info & Restore Window Button
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        Text {
+                            text: bridge.currentTrackTitle
+                            font.pixelSize: Theme.fontSizeBase
+                            font.bold: true
+                            color: Theme.textPrimary
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+
+                        Text {
+                            text: bridge.currentArtist + (bridge.currentAlbum.length > 0 ? " — " + bridge.currentAlbum : "")
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.textSecondary
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                    }
+
+                    // Format Badge
+                    Badge {
+                        text: bridge.currentCodec
+                        visible: text.length > 0
+                        fontSize: 8
+                        badgeColor: Theme.surfaceElevated
+                        borderColor: Theme.panelBorder
+                        textColor: Theme.accent
+                    }
+
+                    // Restore Normal Window Button
+                    Rectangle {
+                        width: 24
+                        height: 24
+                        radius: Theme.cornerRadiusSmall
+                        color: restoreMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+                        border.color: restoreMouse.containsMouse ? Theme.panelBorder : "transparent"
+
+                        VectorIcon {
+                            anchors.centerIn: parent
+                            name: "external"
+                            width: 11
+                            height: 11
+                            color: restoreMouse.containsMouse ? Theme.accent : Theme.textMuted
+                        }
+
+                        MouseArea {
+                            id: restoreMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: toggleMiniPlayer()
+                        }
+                        ToolTip.visible: restoreMouse.containsMouse
+                        ToolTip.text: "Restore Full Player (Ctrl+Shift+M)"
+                        ToolTip.delay: 400
+                    }
+                }
+
+                // Seekbar Row
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Text {
+                        text: bridge.positionFormatted
+                        font.pixelSize: 9
+                        color: Theme.textMuted
+                    }
+
+                    Slider {
+                        id: miniSeekSlider
+                        Layout.fillWidth: true
+                        from: 0
+                        to: Math.max(1, bridge.durationMs)
+                        value: bridge.positionMs
+                        onMoved: bridge.seek(value)
+                    }
+
+                    Text {
+                        text: bridge.durationFormatted
+                        font.pixelSize: 9
+                        color: Theme.textMuted
+                    }
+                }
+
+                // Transport Deck Row
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    // Previous Track Button
+                    Rectangle {
+                        width: 26
+                        height: 26
+                        radius: 13
+                        color: miniPrevMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+                        VectorIcon { anchors.centerIn: parent; name: "previous"; width: 11; height: 11; color: Theme.textPrimary }
+                        MouseArea {
+                            id: miniPrevMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: bridge.previousTrack()
+                        }
+                    }
+
+                    // Play / Pause Button
+                    Rectangle {
+                        width: 28
+                        height: 28
+                        radius: 14
+                        color: miniPlayMouse.containsMouse ? Theme.accentHover : Theme.accent
+                        VectorIcon {
+                            anchors.centerIn: parent
+                            name: bridge.isPlaying ? "pause" : "play"
+                            width: 12
+                            height: 12
+                            color: Theme.textPrimary
+                        }
+                        MouseArea {
+                            id: miniPlayMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: bridge.togglePlayPause()
+                        }
+                    }
+
+                    // Next Track Button
+                    Rectangle {
+                        width: 26
+                        height: 26
+                        radius: 13
+                        color: miniNextMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+                        VectorIcon { anchors.centerIn: parent; name: "next"; width: 11; height: 11; color: Theme.textPrimary }
+                        MouseArea {
+                            id: miniNextMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: bridge.nextTrack()
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // Volume Icon & Slider
+                    VectorIcon {
+                        name: bridge.isMuted ? "volume_mute" : "volume"
+                        width: 12
+                        height: 12
+                        color: Theme.textSecondary
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: bridge.toggleMute()
+                        }
+                    }
+
+                    Slider {
+                        id: miniVolSlider
+                        Layout.preferredWidth: 70
+                        from: 0.0
+                        to: 1.0
+                        value: bridge.volume
+                        onMoved: bridge.setVolume(value)
+                    }
+                }
+            }
+        }
+    }
+
+    // Equalizer Overlay
+    EqualizerOverlay {
+        id: equalizerOverlay
+        anchors.centerIn: parent
+        visible: showEqualizer && !isMiniPlayer
+        z: 100
+        onClosed: showEqualizer = false
     }
 }

@@ -417,3 +417,152 @@ TEST_F(SettingsTest, DiagnosticsAndFactoryReset) {
   EXPECT_EQ(bridge.loggingVerbosity(), "Info");
   EXPECT_TRUE(bridge.globalMediaKeysEnabled());
 }
+
+TEST_F(SettingsTest, TrackListModelSelection) {
+  MockDb db;
+  TrackListModel model(&db);
+
+  core::Track t1;
+  t1.id = "t1";
+  t1.title = "Song 1";
+  t1.artist = "Artist 1";
+  t1.durationMs = 180000;
+
+  core::Track t2;
+  t2.id = "t2";
+  t2.title = "Song 2";
+  t2.artist = "Artist 2";
+  t2.durationMs = 240000;
+
+  core::Track t3;
+  t3.id = "t3";
+  t3.title = "Song 3";
+  t3.artist = "Artist 3";
+  t3.durationMs = 200000;
+
+  model.setTracks({t1, t2, t3});
+  EXPECT_EQ(model.rowCount(), 3);
+  EXPECT_EQ(model.selectedCount(), 0);
+
+  // Toggle selection
+  model.toggleSelection(0);
+  EXPECT_TRUE(model.isSelected(0));
+  EXPECT_FALSE(model.isSelected(1));
+  EXPECT_EQ(model.selectedCount(), 1);
+
+  // Set row selected
+  model.setRowSelected(1, true);
+  EXPECT_EQ(model.selectedCount(), 2);
+  EXPECT_TRUE(model.isSelected(1));
+
+  // Invert selection
+  model.invertSelection();
+  EXPECT_EQ(model.selectedCount(), 1);
+  EXPECT_FALSE(model.isSelected(0));
+  EXPECT_FALSE(model.isSelected(1));
+  EXPECT_TRUE(model.isSelected(2));
+
+  // Select all
+  model.selectAll();
+  EXPECT_EQ(model.selectedCount(), 3);
+  EXPECT_TRUE(model.isSelected(0));
+  EXPECT_TRUE(model.isSelected(1));
+  EXPECT_TRUE(model.isSelected(2));
+
+  // Clear selection
+  model.clearSelection();
+  EXPECT_EQ(model.selectedCount(), 0);
+  EXPECT_FALSE(model.isSelected(0));
+
+  // Select range
+  model.selectRange(0, 1);
+  EXPECT_EQ(model.selectedCount(), 2);
+  EXPECT_TRUE(model.isSelected(0));
+  EXPECT_TRUE(model.isSelected(1));
+  EXPECT_FALSE(model.isSelected(2));
+  model.clearSelection();
+
+  // Get selected tracks and remove
+  model.setRowSelected(1, true);
+  auto selectedIds = model.getSelectedTrackIds();
+  EXPECT_EQ(selectedIds.size(), 1);
+  EXPECT_EQ(selectedIds[0].toString(), "t2");
+
+  model.removeSelected();
+  EXPECT_EQ(model.rowCount(), 2);
+  EXPECT_EQ(model.selectedCount(), 0);
+}
+
+TEST_F(SettingsTest, FileAndEditMenuActions) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Undo / Redo initial state
+  EXPECT_FALSE(bridge.canUndo());
+  EXPECT_FALSE(bridge.canRedo());
+
+  // Push custom command
+  bool commandExecuted = false;
+  bridge.pushUndoCommand(
+      "Test Action", [&commandExecuted]() { commandExecuted = false; },
+      [&commandExecuted]() { commandExecuted = true; });
+
+  EXPECT_TRUE(bridge.canUndo());
+  EXPECT_FALSE(bridge.canRedo());
+  EXPECT_EQ(bridge.undoActionName(), "Test Action");
+
+  bridge.undo();
+  EXPECT_FALSE(bridge.canUndo());
+  EXPECT_TRUE(bridge.canRedo());
+  EXPECT_EQ(bridge.redoActionName(), "Test Action");
+
+  bridge.redo();
+  EXPECT_TRUE(bridge.canUndo());
+  EXPECT_FALSE(bridge.canRedo());
+
+  // Export Active View
+  core::Track t;
+  t.id = "test_export";
+  t.title = "Export Title";
+  t.artist = "Export Artist";
+  t.album = "Export Album";
+  t.genre = "Test";
+  t.year = 2024;
+  t.trackNumber = 1;
+  t.durationMs = 120000;
+  t.filePath = "/tmp/test.flac";
+  t.codec = "FLAC";
+  t.bitrate = 1411;
+  bridge.trackModel()->setTracks({t});
+
+  QString m3u8Path = QDir::tempPath() + "/parakeet_test_export.m3u8";
+  QString csvPath = QDir::tempPath() + "/parakeet_test_export.csv";
+  QString jsonPath = QDir::tempPath() + "/parakeet_test_export.json";
+
+  EXPECT_TRUE(bridge.exportActiveView(m3u8Path, "m3u8"));
+  EXPECT_TRUE(QFile::exists(m3u8Path));
+  QFile::remove(m3u8Path);
+
+  EXPECT_TRUE(bridge.exportActiveView(csvPath, "csv"));
+  EXPECT_TRUE(QFile::exists(csvPath));
+  QFile::remove(csvPath);
+
+  EXPECT_TRUE(bridge.exportActiveView(jsonPath, "json"));
+  EXPECT_TRUE(QFile::exists(jsonPath));
+  QFile::remove(jsonPath);
+
+  // Network stream
+  bridge.openNetworkStream("http://stream.example.com/audio.mp3",
+                           "Example Radio");
+  EXPECT_EQ(bridge.currentTrackTitle(), "Example Radio");
+
+  // History Track Model
+  EXPECT_NE(bridge.historyTrackModel(), nullptr);
+  bridge.refreshHistory();
+}

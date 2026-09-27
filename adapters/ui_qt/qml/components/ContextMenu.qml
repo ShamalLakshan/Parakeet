@@ -128,6 +128,18 @@ Menu {
         }
     }
 
+    ContextMenuItem {
+        text: "Edit Track Tags... (Ctrl+T)"
+        visible: root.menuType === "track"
+        onTriggered: root.editTagsRequested()
+    }
+
+    ContextMenuItem {
+        text: "Delete / Remove (Delete)"
+        visible: root.menuType === "track"
+        onTriggered: root.deleteTrackRequested()
+    }
+
     ContextMenuSeparator {
         visible: root.menuType === "track"
     }
