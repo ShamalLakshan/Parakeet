@@ -70,6 +70,14 @@ ApplicationWindow {
         Theme.uiScale = 1.0;
     }
 
+    function formatTimestamp(ms) {
+        if (ms < 0) return "--:--";
+        var totalSec = Math.floor(ms / 1000);
+        var mins = Math.floor(totalSec / 60);
+        var secs = totalSec % 60;
+        return mins + ":" + (secs < 10 ? "0" : "") + secs;
+    }
+
     PreferencesDialog {
         id: preferencesDialog
     }
@@ -80,6 +88,33 @@ ApplicationWindow {
 
     OpenUrlDialog {
         id: openUrlDialog
+    }
+
+    ShortcutsDialog {
+        id: shortcutsDialog
+    }
+
+    DiagnosticsDialog {
+        id: diagnosticsDialog
+    }
+
+    AboutDialog {
+        id: aboutDialog
+    }
+
+    SleepTimerDialog {
+        id: sleepTimerDialog
+    }
+
+    NewPlaylistDialog {
+        id: newPlaylistDialog
+    }
+
+    FileDialog {
+        id: importPlaylistDialog
+        title: "Import Playlist File"
+        nameFilters: ["Playlist files (*.m3u *.m3u8 *.pls *.xspf)", "All files (*)"]
+        onAccepted: bridge.importPlaylist(selectedFile.toString())
     }
 
     FileDialog {
@@ -156,6 +191,7 @@ ApplicationWindow {
 
     // Keyboard shortcuts - Playback Transport
     Shortcut { sequence: "Space"; onActivated: bridge.togglePlayPause() }
+    Shortcut { sequence: "Shift+Space"; onActivated: bridge.toggleStopAfterCurrentTrack() }
     Shortcut { sequence: "Ctrl+Right"; onActivated: bridge.nextTrack() }
     Shortcut { sequence: "Ctrl+Left"; onActivated: bridge.previousTrack() }
     Shortcut { sequence: "Ctrl+Up"; onActivated: bridge.setVolume(bridge.volume + 0.05) }
@@ -168,11 +204,31 @@ ApplicationWindow {
     Shortcut { sequence: "Right"; onActivated: bridge.seek(bridge.positionMs + 5000) }
     Shortcut { sequence: "Shift+Left"; onActivated: bridge.seek(bridge.positionMs - 30000) }
     Shortcut { sequence: "Shift+Right"; onActivated: bridge.seek(bridge.positionMs + 30000) }
+    Shortcut { sequence: "Home"; onActivated: bridge.seek(0) }
+    Shortcut { sequence: "End"; onActivated: bridge.seek(bridge.durationMs) }
+    Shortcut { sequence: "["; onActivated: bridge.setLoopPointA() }
+    Shortcut { sequence: "]"; onActivated: bridge.setLoopPointB() }
+    Shortcut { sequence: "\\"; onActivated: bridge.clearLoop() }
 
-    // Keyboard shortcuts - File Operations
+    // Media Keys
+    Shortcut { sequence: "MediaPlay"; onActivated: bridge.togglePlayPause() }
+    Shortcut { sequence: "MediaPause"; onActivated: bridge.togglePlayPause() }
+    Shortcut { sequence: "MediaTogglePlayPause"; onActivated: bridge.togglePlayPause() }
+    Shortcut { sequence: "MediaStop"; onActivated: bridge.stop() }
+    Shortcut { sequence: "MediaNext"; onActivated: bridge.nextTrack() }
+    Shortcut { sequence: "MediaPrevious"; onActivated: bridge.previousTrack() }
+    Shortcut { sequence: "AudioRaiseVolume"; onActivated: bridge.setVolume(bridge.volume + 0.05) }
+    Shortcut { sequence: "AudioLowerVolume"; onActivated: bridge.setVolume(bridge.volume - 0.05) }
+    Shortcut { sequence: "AudioMute"; onActivated: bridge.toggleMute() }
+
+    // Keyboard shortcuts - File & Library Operations
     Shortcut { sequence: "Ctrl+O"; onActivated: openAudioFileDialog.open() }
     Shortcut { sequence: "Ctrl+Shift+O"; onActivated: openMusicFolderDialog.open() }
     Shortcut { sequence: "Ctrl+U"; onActivated: openUrlDialog.open() }
+    Shortcut { sequence: "Ctrl+N"; onActivated: { newPlaylistDialog.isSmart = false; newPlaylistDialog.open(); } }
+    Shortcut { sequence: "Ctrl+Shift+N"; onActivated: newPlaylistDialog.openSmart() }
+    Shortcut { sequence: "F5"; onActivated: bridge.rescanAllMonitoredFolders() }
+    Shortcut { sequence: "Ctrl+F5"; onActivated: bridge.incrementalQuickScan() }
     Shortcut { sequence: "Ctrl+E"; onActivated: exportViewDialog.open() }
     Shortcut { sequence: "Ctrl+,"; onActivated: preferencesDialog.open() }
     Shortcut { sequence: "Ctrl+W"; onActivated: root.hide() }
@@ -255,6 +311,10 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl++"; onActivated: zoomIn() }
     Shortcut { sequence: "Ctrl+-"; onActivated: zoomOut() }
     Shortcut { sequence: "Ctrl+0"; onActivated: zoomReset() }
+    Shortcut { sequence: "Ctrl+Shift+E"; onActivated: showEqualizer = !showEqualizer }
+    Shortcut { sequence: "F1"; onActivated: Qt.openUrlExternally("https://github.com/ShamalLakshan/Parakeet") }
+    Shortcut { sequence: "Ctrl+/"; onActivated: shortcutsDialog.open() }
+    Shortcut { sequence: "Ctrl+?"; onActivated: shortcutsDialog.open() }
 
     FolderDialog {
         id: folderDialog
@@ -356,16 +416,8 @@ ApplicationWindow {
                             }
                             MenuSeparator {}
                             MenuItem {
-                                text: "Preferences / Settings... (Ctrl+,)"
+                                text: "Preferences & Settings... (Ctrl+,)"
                                 onTriggered: preferencesDialog.open()
-                            }
-                            MenuItem {
-                                text: "Purge Missing / Dead Files"
-                                onTriggered: bridge.purgeMissingTracks()
-                            }
-                            MenuItem {
-                                text: "Clear Entire Library"
-                                onTriggered: bridge.clearLibrary()
                             }
                             MenuSeparator {}
                             MenuItem {
@@ -646,28 +698,28 @@ ApplicationWindow {
                         }
                     }
 
-                    // Controls Menu Button
+                    // Playback Menu Button
                     Rectangle {
-                        width: ctrlMenuText.implicitWidth + 14
+                        width: playbackMenuText.implicitWidth + 14
                         height: 22
                         radius: 3
-                        color: ctrlMenuMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+                        color: playbackMenuMouse.containsMouse ? Theme.surfaceElevated : "transparent"
                         Text {
-                            id: ctrlMenuText
+                            id: playbackMenuText
                             anchors.centerIn: parent
-                            text: "Controls"
+                            text: "Playback"
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.textSecondary
                         }
                         MouseArea {
-                            id: ctrlMenuMouse
+                            id: playbackMenuMouse
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: ctrlMenu.open()
+                            onClicked: playbackMenu.open()
                         }
                         Menu {
-                            id: ctrlMenu
+                            id: playbackMenu
                             y: parent.height
                             MenuItem {
                                 text: bridge.isPlaying ? "Pause (Space)" : "Play (Space)"
@@ -678,6 +730,12 @@ ApplicationWindow {
                                 onTriggered: bridge.stop()
                             }
                             MenuItem {
+                                text: "Stop After Current Track (Shift+Space)"
+                                checkable: true
+                                checked: bridge.stopAfterCurrentTrack
+                                onTriggered: bridge.toggleStopAfterCurrentTrack()
+                            }
+                            MenuItem {
                                 text: "Next Track (Ctrl+Right)"
                                 onTriggered: bridge.nextTrack()
                             }
@@ -686,17 +744,104 @@ ApplicationWindow {
                                 onTriggered: bridge.previousTrack()
                             }
                             MenuSeparator {}
+                            Menu {
+                                title: "Seeking"
+                                MenuItem {
+                                    text: "Short Seek Backward 5s (Left)"
+                                    onTriggered: bridge.seek(bridge.positionMs - 5000)
+                                }
+                                MenuItem {
+                                    text: "Short Seek Forward 5s (Right)"
+                                    onTriggered: bridge.seek(bridge.positionMs + 5000)
+                                }
+                                MenuItem {
+                                    text: "Long Seek Backward 30s (Shift+Left)"
+                                    onTriggered: bridge.seek(bridge.positionMs - 30000)
+                                }
+                                MenuItem {
+                                    text: "Long Seek Forward 30s (Shift+Right)"
+                                    onTriggered: bridge.seek(bridge.positionMs + 30000)
+                                }
+                                MenuSeparator {}
+                                MenuItem {
+                                    text: "Seek to Track Beginning (Home)"
+                                    onTriggered: bridge.seek(0)
+                                }
+                                MenuItem {
+                                    text: "Seek to Track End (End)"
+                                    onTriggered: bridge.seek(bridge.durationMs)
+                                }
+                            }
+                            MenuSeparator {}
                             MenuItem {
-                                text: "Volume Up (Ctrl+Up)"
+                                text: "Volume Up 5% (Ctrl+Up)"
                                 onTriggered: bridge.setVolume(bridge.volume + 0.05)
                             }
                             MenuItem {
-                                text: "Volume Down (Ctrl+Down)"
+                                text: "Volume Down 5% (Ctrl+Down)"
                                 onTriggered: bridge.setVolume(bridge.volume - 0.05)
                             }
                             MenuItem {
                                 text: "Mute Toggle (Ctrl+M)"
+                                checkable: true
+                                checked: bridge.isMuted
                                 onTriggered: bridge.toggleMute()
+                            }
+                            MenuSeparator {}
+                            Menu {
+                                title: "Playback Speed"
+                                MenuItem {
+                                    text: "0.5x"
+                                    checkable: true
+                                    checked: Math.abs(bridge.playbackRate - 0.5) < 0.05
+                                    onTriggered: bridge.setPlaybackRate(0.5)
+                                }
+                                MenuItem {
+                                    text: "0.75x"
+                                    checkable: true
+                                    checked: Math.abs(bridge.playbackRate - 0.75) < 0.05
+                                    onTriggered: bridge.setPlaybackRate(0.75)
+                                }
+                                MenuItem {
+                                    text: "1.0x (Normal)"
+                                    checkable: true
+                                    checked: Math.abs(bridge.playbackRate - 1.0) < 0.05
+                                    onTriggered: bridge.setPlaybackRate(1.0)
+                                }
+                                MenuItem {
+                                    text: "1.25x"
+                                    checkable: true
+                                    checked: Math.abs(bridge.playbackRate - 1.25) < 0.05
+                                    onTriggered: bridge.setPlaybackRate(1.25)
+                                }
+                                MenuItem {
+                                    text: "1.5x"
+                                    checkable: true
+                                    checked: Math.abs(bridge.playbackRate - 1.5) < 0.05
+                                    onTriggered: bridge.setPlaybackRate(1.5)
+                                }
+                                MenuItem {
+                                    text: "2.0x"
+                                    checkable: true
+                                    checked: Math.abs(bridge.playbackRate - 2.0) < 0.05
+                                    onTriggered: bridge.setPlaybackRate(2.0)
+                                }
+                            }
+                            Menu {
+                                title: "A-B Looping"
+                                MenuItem {
+                                    text: "Set Loop Point A (" + (bridge.loopPointA >= 0 ? formatTimestamp(bridge.loopPointA) : "--:--") + ")  ([)"
+                                    onTriggered: bridge.setLoopPointA()
+                                }
+                                MenuItem {
+                                    text: "Set Loop Point B (" + (bridge.loopPointB >= 0 ? formatTimestamp(bridge.loopPointB) : "--:--") + ")  (])"
+                                    onTriggered: bridge.setLoopPointB()
+                                }
+                                MenuItem {
+                                    text: "Clear Loop (\\)"
+                                    enabled: bridge.isLoopActive || bridge.loopPointA >= 0 || bridge.loopPointB >= 0
+                                    onTriggered: bridge.clearLoop()
+                                }
                             }
                             MenuSeparator {}
                             MenuItem {
@@ -715,6 +860,85 @@ ApplicationWindow {
                             MenuItem {
                                 text: "Shuffle All Tracks"
                                 onTriggered: bridge.shuffleAll()
+                            }
+                        }
+                    }
+
+                    // Library Menu Button
+                    Rectangle {
+                        width: libraryMenuText.implicitWidth + 14
+                        height: 22
+                        radius: 3
+                        color: libraryMenuMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+                        Text {
+                            id: libraryMenuText
+                            anchors.centerIn: parent
+                            text: "Library"
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.textSecondary
+                        }
+                        MouseArea {
+                            id: libraryMenuMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: libraryMenu.open()
+                        }
+                        Menu {
+                            id: libraryMenu
+                            y: parent.height
+                            MenuItem {
+                                text: "Rescan All Monitored Folders (F5)"
+                                onTriggered: bridge.rescanAllMonitoredFolders()
+                            }
+                            MenuItem {
+                                text: "Quick Incremental Scan (Ctrl+F5)"
+                                onTriggered: bridge.incrementalQuickScan()
+                            }
+                            MenuItem {
+                                text: "Manage Monitored Folders..."
+                                onTriggered: {
+                                    preferencesDialog.activeCategory = 3;
+                                    preferencesDialog.open();
+                                }
+                            }
+                            MenuSeparator {}
+                            MenuItem {
+                                text: "Create New Playlist... (Ctrl+N)"
+                                onTriggered: {
+                                    newPlaylistDialog.isSmart = false;
+                                    newPlaylistDialog.open();
+                                }
+                            }
+                            MenuItem {
+                                text: "Create Smart Playlist... (Ctrl+Shift+N)"
+                                onTriggered: newPlaylistDialog.openSmart()
+                            }
+                            MenuItem {
+                                text: "Import Playlist..."
+                                onTriggered: importPlaylistDialog.open()
+                            }
+                            MenuItem {
+                                text: "Export Active View / Playlist... (Ctrl+E)"
+                                onTriggered: exportViewDialog.open()
+                            }
+                            MenuSeparator {}
+                            MenuItem {
+                                text: "Deduplicate Library Tracks"
+                                onTriggered: bridge.deduplicateTracks()
+                            }
+                            MenuItem {
+                                text: "Check for Dead / Broken Files"
+                                onTriggered: bridge.purgeMissingTracks()
+                            }
+                            MenuItem {
+                                text: "Clear Cover Art Cache"
+                                onTriggered: bridge.clearCoverArtCache()
+                            }
+                            MenuSeparator {}
+                            MenuItem {
+                                text: "Clear Entire Library..."
+                                onTriggered: bridge.clearLibrary()
                             }
                         }
                     }
@@ -743,24 +967,106 @@ ApplicationWindow {
                             id: toolsMenu
                             y: parent.height
                             MenuItem {
-                                text: "Preferences & Settings..."
-                                onTriggered: preferencesDialog.open()
+                                text: "Metadata Tag Editor... (Ctrl+T)"
+                                onTriggered: {
+                                    var sel = bridge.trackModel.getSelectedTracks();
+                                    if (sel.length > 0) {
+                                        tagEditorDialog.targetTracks = sel.length > 1 ? sel : [];
+                                        tagEditorDialog.targetTrack = sel[0];
+                                    } else {
+                                        tagEditorDialog.targetTracks = [];
+                                        tagEditorDialog.targetTrack = null;
+                                    }
+                                    tagEditorDialog.open();
+                                }
                             }
                             MenuItem {
-                                text: "Rescan Library"
-                                onTriggered: bridge.rescanAllMonitoredFolders()
+                                text: (showEqualizer ? "Hide" : "Show") + " Parametric Equalizer & DSP (Ctrl+Shift+E)"
+                                onTriggered: showEqualizer = !showEqualizer
                             }
                             MenuItem {
-                                text: "Purge Dead Tracks"
-                                onTriggered: bridge.purgeMissingTracks()
+                                text: "Playback Sleep Timer..."
+                                onTriggered: sleepTimerDialog.open()
                             }
                             MenuSeparator {}
+                            Menu {
+                                id: audioDeviceMenu
+                                title: "Audio Output Device"
+                                Instantiator {
+                                    model: bridge.availableAudioDevices
+                                    onObjectAdded: (index, object) => audioDeviceMenu.insertItem(index, object)
+                                    onObjectRemoved: (index, object) => audioDeviceMenu.removeItem(object)
+                                    delegate: MenuItem {
+                                        text: modelData + (bridge.currentAudioDevice === modelData ? "  ✓" : "")
+                                        checkable: true
+                                        checked: bridge.currentAudioDevice === modelData
+                                        onTriggered: bridge.setCurrentAudioDevice(modelData)
+                                    }
+                                }
+                            }
+                            MenuSeparator {}
+                            MenuItem {
+                                text: "Preferences & Settings... (Ctrl+,)"
+                                onTriggered: preferencesDialog.open()
+                            }
                             MenuItem {
                                 text: "Manage Plugins & Extensions..."
                                 onTriggered: {
                                     preferencesDialog.activeCategory = 5;
                                     preferencesDialog.open();
                                 }
+                            }
+                        }
+                    }
+
+                    // Help Menu Button
+                    Rectangle {
+                        width: helpMenuText.implicitWidth + 14
+                        height: 22
+                        radius: 3
+                        color: helpMenuMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+                        Text {
+                            id: helpMenuText
+                            anchors.centerIn: parent
+                            text: "Help"
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.textSecondary
+                        }
+                        MouseArea {
+                            id: helpMenuMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: helpMenu.open()
+                        }
+                        Menu {
+                            id: helpMenu
+                            y: parent.height
+                            MenuItem {
+                                text: "Documentation & User Guide (F1)"
+                                onTriggered: Qt.openUrlExternally("https://github.com/ShamalLakshan/Parakeet")
+                            }
+                            MenuItem {
+                                text: "Keyboard Shortcuts Cheat Sheet (Ctrl+/)"
+                                onTriggered: shortcutsDialog.open()
+                            }
+                            MenuItem {
+                                text: "Audio Pipeline Diagnostics..."
+                                onTriggered: diagnosticsDialog.open()
+                            }
+                            MenuItem {
+                                text: "Open Application Log File"
+                                onTriggered: Qt.openUrlExternally("file://" + bridge.getLogFilePath())
+                            }
+                            MenuSeparator {}
+                            MenuItem {
+                                text: "Report an Issue / GitHub..."
+                                onTriggered: Qt.openUrlExternally("https://github.com/ShamalLakshan/Parakeet/issues")
+                            }
+                            MenuSeparator {}
+                            MenuItem {
+                                text: "About Parakeet"
+                                onTriggered: aboutDialog.open()
                             }
                         }
                     }

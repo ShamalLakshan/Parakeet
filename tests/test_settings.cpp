@@ -8,34 +8,56 @@
 #include <QDir>
 #include <QFile>
 #include <QSettings>
+#include <QStandardPaths>
 #include <gtest/gtest.h>
 
 namespace {
 
 class MockDb : public core::IMusicDatabasePort {
 public:
+  std::vector<core::Track> tracks;
   bool initialize(const std::string &) override { return true; }
-  bool saveTrack(const core::Track &) override { return true; }
-  bool saveTracks(const std::vector<core::Track> &) override { return true; }
-  std::optional<core::Track> getTrackById(const std::string &) override {
+  bool saveTrack(const core::Track &t) override {
+    tracks.push_back(t);
+    return true;
+  }
+  bool saveTracks(const std::vector<core::Track> &ts) override {
+    tracks.insert(tracks.end(), ts.begin(), ts.end());
+    return true;
+  }
+  std::optional<core::Track> getTrackById(const std::string &id) override {
+    for (const auto &t : tracks) {
+      if (t.id == id)
+        return t;
+    }
     return std::nullopt;
   }
-  std::optional<core::Track> getTrackByPath(const std::string &) override {
+  std::optional<core::Track> getTrackByPath(const std::string &path) override {
+    for (const auto &t : tracks) {
+      if (t.filePath == path)
+        return t;
+    }
     return std::nullopt;
   }
-  std::vector<core::Track> getAllTracks() override { return {}; }
+  std::vector<core::Track> getAllTracks() override { return tracks; }
   std::vector<core::Track> getTracksByAlbum(const std::string &,
                                             const std::string &) override {
     return {};
   }
-  bool deleteTrack(const std::string &) override { return true; }
+  bool deleteTrack(const std::string &id) override {
+    std::erase_if(tracks, [&](const auto &t) { return t.id == id; });
+    return true;
+  }
   std::vector<core::Album> getAllAlbums() override { return {}; }
   std::optional<core::Album> getAlbumById(const std::string &) override {
     return std::nullopt;
   }
-  bool clearLibrary() override { return true; }
+  bool clearLibrary() override {
+    tracks.clear();
+    return true;
+  }
   bool optimizeDatabase() override { return true; }
-  size_t getTrackCount() override { return 0; }
+  size_t getTrackCount() override { return tracks.size(); }
   size_t getAlbumCount() override { return 0; }
 };
 
@@ -565,4 +587,101 @@ TEST_F(SettingsTest, FileAndEditMenuActions) {
   // History Track Model
   EXPECT_NE(bridge.historyTrackModel(), nullptr);
   bridge.refreshHistory();
+}
+
+TEST_F(SettingsTest, PlaybackAndLibraryMenuActions) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Playback Rate
+  bridge.setPlaybackRate(1.25);
+  EXPECT_NEAR(bridge.playbackRate(), 1.25, 0.001);
+  bridge.setPlaybackRate(0.5);
+  EXPECT_NEAR(bridge.playbackRate(), 0.5, 0.001);
+  bridge.setPlaybackRate(1.0);
+  EXPECT_NEAR(bridge.playbackRate(), 1.0, 0.001);
+
+  // A-B Looping
+  EXPECT_FALSE(bridge.isLoopActive());
+  bridge.setLoopPointA();
+  EXPECT_GE(bridge.loopPointA(), 0);
+  bridge.setLoopPointB();
+  bridge.clearLoop();
+  EXPECT_FALSE(bridge.isLoopActive());
+  EXPECT_EQ(bridge.loopPointA(), -1);
+  EXPECT_EQ(bridge.loopPointB(), -1);
+
+  // Stop After Current Track
+  EXPECT_FALSE(bridge.stopAfterCurrentTrack());
+  bridge.toggleStopAfterCurrentTrack();
+  EXPECT_TRUE(bridge.stopAfterCurrentTrack());
+  bridge.toggleStopAfterCurrentTrack();
+  EXPECT_FALSE(bridge.stopAfterCurrentTrack());
+
+  // Sleep Timer
+  EXPECT_FALSE(bridge.isSleepTimerActive());
+  bridge.startSleepTimer(15);
+  EXPECT_TRUE(bridge.isSleepTimerActive());
+  EXPECT_EQ(bridge.sleepTimerRemainingSec(), 15 * 60);
+  bridge.cancelSleepTimer();
+  EXPECT_FALSE(bridge.isSleepTimerActive());
+  EXPECT_EQ(bridge.sleepTimerRemainingSec(), 0);
+
+  // Playlist creation
+  EXPECT_TRUE(bridge.createPlaylist("Test_Favorites"));
+  QString plPath =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+      "/playlists/Test_Favorites.m3u8";
+  EXPECT_TRUE(QFile::exists(plPath));
+  QFile::remove(plPath);
+
+  // Smart Playlist creation
+  EXPECT_TRUE(
+      bridge.createSmartPlaylist("High_Bitrate", "{\"genre\":\"Rock\"}"));
+  QString smartPath =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+      "/playlists/High_Bitrate.smart.json";
+  EXPECT_TRUE(QFile::exists(smartPath));
+  QFile::remove(smartPath);
+
+  // Diagnostics
+  auto diag = bridge.audioPipelineDiagnostics();
+  EXPECT_TRUE(diag.contains("sampleRate"));
+  EXPECT_TRUE(diag.contains("bitDepth"));
+  EXPECT_TRUE(diag.contains("codec"));
+  EXPECT_TRUE(diag.contains("audioBackend"));
+  EXPECT_TRUE(diag.contains("isBitPerfect"));
+
+  // Log file path
+  QString logPath = bridge.getLogFilePath();
+  EXPECT_TRUE(logPath.endsWith("parakeet.log"));
+  EXPECT_TRUE(QFile::exists(logPath));
+
+  // Deduplicate tracks
+  core::Track t1;
+  t1.id = "dup_1";
+  t1.title = "Duplicate Song";
+  t1.artist = "Duplicate Artist";
+  t1.durationMs = 180000;
+
+  core::Track t2;
+  t2.id = "dup_2";
+  t2.title = "Duplicate Song";
+  t2.artist = "Duplicate Artist";
+  t2.durationMs = 180000;
+
+  db.saveTrack(t1);
+  db.saveTrack(t2);
+
+  int removed = bridge.deduplicateTracks();
+  EXPECT_GE(removed, 1);
+  EXPECT_TRUE(bridge.canUndo());
+  bridge.undo();
+  EXPECT_TRUE(bridge.canRedo());
+  bridge.redo();
 }

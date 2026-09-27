@@ -322,6 +322,13 @@ void QtBridge::setupPositionTimer() {
       uint64_t realPos = m_player.getPositionMs();
       m_positionMs = static_cast<qint64>(realPos);
       m_positionStr = formatTime(m_positionMs);
+
+      // A-B Looping check
+      if (m_loopPointA >= 0 && m_loopPointB > m_loopPointA &&
+          m_positionMs >= m_loopPointB) {
+        seek(m_loopPointA);
+      }
+
       emit positionChanged();
 
       // Check duration
@@ -795,6 +802,12 @@ void QtBridge::stop() {
 }
 
 void QtBridge::nextTrack() {
+  if (m_stopAfterCurrentTrack) {
+    m_stopAfterCurrentTrack = false;
+    stop();
+    emit playbackSettingsChanged();
+    return;
+  }
   m_player.next();
   auto current = m_player.getCurrentTrack();
   if (current.has_value()) {
@@ -805,6 +818,10 @@ void QtBridge::nextTrack() {
 }
 
 void QtBridge::previousTrack() {
+  if (m_positionMs > 3000) {
+    seek(0);
+    return;
+  }
   m_player.previous();
   auto current = m_player.getCurrentTrack();
   if (current.has_value()) {
@@ -857,6 +874,257 @@ void QtBridge::setShuffleMode(int mode) {
 void QtBridge::cycleShuffleMode() {
   int next = (shuffleMode() + 1) % 3;
   setShuffleMode(next);
+}
+
+void QtBridge::setPlaybackRate(qreal rate) {
+  qreal clamped = std::clamp(rate, 0.25, 4.0);
+  if (qFuzzyCompare(m_playbackRate, clamped))
+    return;
+  m_playbackRate = clamped;
+  m_player.setPlaybackRate(static_cast<float>(m_playbackRate));
+  emit playbackRateChanged();
+}
+
+void QtBridge::setLoopPointA() {
+  m_loopPointA = m_positionMs;
+  if (m_loopPointB >= 0 && m_loopPointB <= m_loopPointA) {
+    m_loopPointB = -1;
+  }
+  emit loopPointsChanged();
+}
+
+void QtBridge::setLoopPointB() {
+  if (m_positionMs > m_loopPointA) {
+    m_loopPointB = m_positionMs;
+  } else if (m_loopPointA >= 0) {
+    m_loopPointB = m_loopPointA;
+    m_loopPointA = m_positionMs;
+  } else {
+    m_loopPointA = 0;
+    m_loopPointB = m_positionMs;
+  }
+  emit loopPointsChanged();
+}
+
+void QtBridge::clearLoop() {
+  m_loopPointA = -1;
+  m_loopPointB = -1;
+  emit loopPointsChanged();
+}
+
+void QtBridge::startSleepTimer(int minutes) {
+  if (minutes <= 0) {
+    cancelSleepTimer();
+    return;
+  }
+  m_sleepTimerRemainingSec = minutes * 60;
+  m_sleepTimerActive = true;
+  if (!m_sleepTimer) {
+    m_sleepTimer = new QTimer(this);
+    m_sleepTimer->setInterval(1000);
+    connect(m_sleepTimer, &QTimer::timeout, this, [this]() {
+      if (m_sleepTimerRemainingSec > 0) {
+        --m_sleepTimerRemainingSec;
+        emit sleepTimerChanged();
+      }
+      if (m_sleepTimerRemainingSec <= 0) {
+        cancelSleepTimer();
+        stop();
+      }
+    });
+  }
+  m_sleepTimer->start();
+  emit sleepTimerChanged();
+}
+
+void QtBridge::cancelSleepTimer() {
+  m_sleepTimerActive = false;
+  m_sleepTimerRemainingSec = 0;
+  if (m_sleepTimer) {
+    m_sleepTimer->stop();
+  }
+  emit sleepTimerChanged();
+}
+
+bool QtBridge::createPlaylist(const QString &name) {
+  QString cleanName = name.trimmed();
+  if (cleanName.isEmpty())
+    return false;
+  QString dirPath =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+      "/playlists";
+  QDir().mkpath(dirPath);
+  QString filePath = dirPath + "/" + cleanName + ".m3u8";
+  QFile file(filePath);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    return false;
+  QTextStream out(&file);
+  out << "#EXTM3U\n";
+  out << "#PLAYLIST:" << cleanName << "\n";
+  auto selected = m_trackModel->getSelectedTracks();
+  for (const auto &item : selected) {
+    QVariantMap map = item.toMap();
+    out << "#EXTINF:" << (map["durationMs"].toLongLong() / 1000) << ","
+        << map["artist"].toString() << " - " << map["title"].toString() << "\n";
+    out << map["filePath"].toString() << "\n";
+  }
+  file.close();
+  return true;
+}
+
+bool QtBridge::createSmartPlaylist(const QString &name,
+                                   const QString &rulesJson) {
+  QString cleanName = name.trimmed();
+  if (cleanName.isEmpty())
+    return false;
+  QString dirPath =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+      "/playlists";
+  QDir().mkpath(dirPath);
+  QString filePath = dirPath + "/" + cleanName + ".smart.json";
+  QFile file(filePath);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    return false;
+  QJsonObject obj;
+  obj["name"] = cleanName;
+  obj["type"] = "smart";
+  obj["rules"] = rulesJson;
+  QJsonDocument doc(obj);
+  file.write(doc.toJson());
+  file.close();
+  return true;
+}
+
+bool QtBridge::importPlaylist(const QString &filePath) {
+  QString clean = filePath;
+  if (clean.startsWith("file://")) {
+    clean = QUrl(clean).toLocalFile();
+  }
+  QFile file(clean);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    return false;
+  QTextStream in(&file);
+  std::vector<core::Track> tracks;
+  QFileInfo playlistFi(clean);
+  QDir baseDir = playlistFi.dir();
+
+  while (!in.atEnd()) {
+    QString line = in.readLine().trimmed();
+    if (line.isEmpty() || line.startsWith("#"))
+      continue;
+    QString audioPath = line;
+    if (!QFileInfo(audioPath).isAbsolute()) {
+      audioPath = baseDir.absoluteFilePath(audioPath);
+    }
+    QFileInfo fi(audioPath);
+    if (fi.exists() && fi.isFile()) {
+      auto trkOpt =
+          m_library.getMetadataExtractor().extract(audioPath.toStdString());
+      if (trkOpt) {
+        m_library.getDatabasePort().saveTrack(*trkOpt);
+        tracks.push_back(*trkOpt);
+      }
+    }
+  }
+  file.close();
+  if (!tracks.empty()) {
+    m_player.queueLast(tracks);
+    m_trackModel->loadAllTracks();
+    m_albumModel->reload();
+    syncQueueModel();
+    refreshLibraryStats();
+    return true;
+  }
+  return false;
+}
+
+int QtBridge::deduplicateTracks() {
+  auto all = m_library.getTracks();
+  std::unordered_set<std::string> seen;
+  std::vector<std::string> duplicateIds;
+  std::vector<core::Track> removedTracks;
+
+  for (const auto &track : all) {
+    std::string key = track.title + "\n" + track.artist;
+    if (seen.find(key) != seen.end()) {
+      duplicateIds.push_back(track.id);
+      removedTracks.push_back(track);
+    } else {
+      seen.insert(key);
+    }
+  }
+
+  if (duplicateIds.empty())
+    return 0;
+
+  for (const auto &id : duplicateIds) {
+    m_library.getDatabasePort().deleteTrack(id);
+  }
+
+  pushUndoCommand(
+      QString("Deduplicate %1 Tracks").arg(duplicateIds.size()),
+      [this, removedTracks]() {
+        for (const auto &t : removedTracks) {
+          m_library.getDatabasePort().saveTrack(t);
+        }
+        m_trackModel->loadAllTracks();
+        m_albumModel->reload();
+        refreshLibraryStats();
+      },
+      [this, duplicateIds]() {
+        for (const auto &id : duplicateIds) {
+          m_library.getDatabasePort().deleteTrack(id);
+        }
+        m_trackModel->loadAllTracks();
+        m_albumModel->reload();
+        refreshLibraryStats();
+      });
+
+  m_trackModel->loadAllTracks();
+  m_albumModel->reload();
+  refreshLibraryStats();
+  return static_cast<int>(duplicateIds.size());
+}
+
+QString QtBridge::getLogFilePath() const {
+  QString logDir =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QDir().mkpath(logDir);
+  QString logPath = logDir + "/parakeet.log";
+  if (!QFile::exists(logPath)) {
+    QFile f(logPath);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      QTextStream out(&f);
+      out << "[Parakeet Session Log]\n";
+      out << "Version: 0.1.0\n";
+      out << "Backend: " << m_audioBackend << "\n";
+      f.close();
+    }
+  }
+  return logPath;
+}
+
+QVariantMap QtBridge::audioPipelineDiagnostics() const {
+  QVariantMap map;
+  map["sampleRate"] = m_currentSampleRate > 0 ? m_currentSampleRate : 44100;
+  map["bitDepth"] = m_currentBitDepth > 0 ? m_currentBitDepth : 16;
+  map["channels"] = m_currentChannels > 0 ? m_currentChannels : 2;
+  map["codec"] = m_currentCodec.isEmpty() ? "FLAC / PCM" : m_currentCodec;
+  map["bitrate"] = m_currentBitrate;
+  map["bufferLatencyMs"] = m_bufferLatencyMs;
+  map["audioBackend"] = m_audioBackend;
+  map["currentAudioDevice"] = m_currentAudioDevice;
+  map["isBitPerfect"] = m_bitPerfectExclusive;
+  map["resamplerQuality"] = m_resamplerQuality;
+  map["ditherMode"] = m_ditherMode;
+  map["channelProcessing"] = m_channelProcessing;
+  map["xruns"] = 0;
+  map["state"] = m_isPlaying ? "PLAYING" : "IDLE";
+  map["loopActive"] = isLoopActive();
+  map["loopPointA"] = m_loopPointA;
+  map["loopPointB"] = m_loopPointB;
+  map["playbackRate"] = m_playbackRate;
+  return map;
 }
 
 void QtBridge::playAll() {
@@ -1779,6 +2047,8 @@ void QtBridge::initDefaultHotkeys() {
   m_hotkeys = {
       {"play_pause", "Playback", "Play / Pause playback", "Space", "Space"},
       {"stop", "Playback", "Stop playback", "Ctrl+.", "Ctrl+."},
+      {"stop_after_current", "Playback", "Stop after current track",
+       "Shift+Space", "Shift+Space"},
       {"next_track", "Playback", "Next track", "Ctrl+Right", "Ctrl+Right"},
       {"prev_track", "Playback", "Previous track (Reversible History)",
        "Ctrl+Left", "Ctrl+Left"},
@@ -1790,12 +2060,18 @@ void QtBridge::initDefaultHotkeys() {
        "Shift+Right"},
       {"seek_backward_long", "Playback", "Seek backward (Long)", "Shift+Left",
        "Shift+Left"},
+      {"seek_beginning", "Playback", "Seek to Beginning of Track", "Home",
+       "Home"},
+      {"seek_end", "Playback", "Seek to End of Track", "End", "End"},
       {"volume_up", "Playback", "Volume up (+5%)", "Ctrl+Up", "Ctrl+Up"},
       {"volume_down", "Playback", "Volume down (-5%)", "Ctrl+Down",
        "Ctrl+Down"},
       {"toggle_mute", "Playback", "Mute / Unmute audio", "Ctrl+M", "Ctrl+M"},
       {"cycle_repeat", "Playback", "Cycle Repeat mode", "Ctrl+R", "Ctrl+R"},
       {"cycle_shuffle", "Playback", "Cycle Shuffle mode", "Ctrl+S", "Ctrl+S"},
+      {"set_loop_a", "Playback", "Set A-B Loop Point A", "[", "["},
+      {"set_loop_b", "Playback", "Set A-B Loop Point B", "]", "]"},
+      {"clear_loop", "Playback", "Clear A-B Loop", "\\", "\\"},
 
       {"open_file", "File & Library", "Open Audio File...", "Ctrl+O", "Ctrl+O"},
       {"open_folder", "File & Library", "Open Folder / Directory...",
@@ -1804,6 +2080,14 @@ void QtBridge::initDefaultHotkeys() {
        "Ctrl+U"},
       {"export_view", "File & Library", "Export Active View / Playlist...",
        "Ctrl+E", "Ctrl+E"},
+      {"rescan_all", "File & Library", "Rescan All Monitored Folders", "F5",
+       "F5"},
+      {"quick_scan", "File & Library", "Incremental Quick Scan", "Ctrl+F5",
+       "Ctrl+F5"},
+      {"create_playlist", "File & Library", "Create New Playlist", "Ctrl+N",
+       "Ctrl+N"},
+      {"create_smart_playlist", "File & Library", "Create Smart Playlist",
+       "Ctrl+Shift+N", "Ctrl+Shift+N"},
       {"minimize_tray", "File & Library", "Minimize to System Tray", "Ctrl+W",
        "Ctrl+W"},
       {"exit_app", "File & Library", "Exit Application", "Ctrl+Q", "Ctrl+Q"},
@@ -1831,6 +2115,8 @@ void QtBridge::initDefaultHotkeys() {
        "Ctrl+4", "Ctrl+4"},
       {"toggle_equalizer", "View & Navigation",
        "Toggle Parametric Equalizer Overlay", "Ctrl+5", "Ctrl+5"},
+      {"equalizer_dsp", "View & Navigation", "Open DSP & Parametric Equalizer",
+       "Ctrl+Shift+E", "Ctrl+Shift+E"},
       {"focus_search", "View & Navigation", "Focus Instant Search input",
        "Ctrl+F", "Ctrl+F"},
       {"clear_filter_escape", "View & Navigation",
@@ -1854,11 +2140,11 @@ void QtBridge::initDefaultHotkeys() {
       {"zoom_reset", "View & Navigation", "Reset Zoom Scale (100%)", "Ctrl+0",
        "Ctrl+0"},
 
-      {"open_preferences", "Library & Editing", "Open Preferences Dialog",
-       "Ctrl+,", "Ctrl+,"},
-      {"rescan_library", "Library & Editing",
-       "Rescan Monitored Library Folders", "Ctrl+Shift+R", "Ctrl+Shift+R"},
-      {"quick_scan", "Library & Editing", "Incremental Quick Scan", "F5", "F5"},
+      {"open_preferences", "Tools & Help", "Open Preferences Dialog", "Ctrl+,",
+       "Ctrl+,"},
+      {"help_docs", "Tools & Help", "Documentation & User Manual", "F1", "F1"},
+      {"help_shortcuts", "Tools & Help", "Keyboard Shortcuts Cheat Sheet",
+       "Ctrl+/", "Ctrl+/"},
       {"clear_queue", "Library & Editing", "Clear Playback Queue",
        "Ctrl+Shift+Del", "Ctrl+Shift+Del"},
       {"shuffle_queue", "Library & Editing", "Shuffle Playback Queue",

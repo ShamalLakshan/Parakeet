@@ -35,6 +35,11 @@ qt_add_qml_module(ui_adapter
         ui_qt/qml/dialogs/PreferencesDialog.qml
         ui_qt/qml/dialogs/TagEditorDialog.qml
         ui_qt/qml/dialogs/OpenUrlDialog.qml
+        ui_qt/qml/dialogs/ShortcutsDialog.qml
+        ui_qt/qml/dialogs/DiagnosticsDialog.qml
+        ui_qt/qml/dialogs/AboutDialog.qml
+        ui_qt/qml/dialogs/SleepTimerDialog.qml
+        ui_qt/qml/dialogs/NewPlaylistDialog.qml
         ui_qt/qml/views/QueueView.qml
 )
 
