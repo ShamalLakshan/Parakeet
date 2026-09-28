@@ -8,34 +8,56 @@
 #include <QDir>
 #include <QFile>
 #include <QSettings>
+#include <QStandardPaths>
 #include <gtest/gtest.h>
 
 namespace {
 
 class MockDb : public core::IMusicDatabasePort {
 public:
+  std::vector<core::Track> tracks;
   bool initialize(const std::string &) override { return true; }
-  bool saveTrack(const core::Track &) override { return true; }
-  bool saveTracks(const std::vector<core::Track> &) override { return true; }
-  std::optional<core::Track> getTrackById(const std::string &) override {
+  bool saveTrack(const core::Track &t) override {
+    tracks.push_back(t);
+    return true;
+  }
+  bool saveTracks(const std::vector<core::Track> &ts) override {
+    tracks.insert(tracks.end(), ts.begin(), ts.end());
+    return true;
+  }
+  std::optional<core::Track> getTrackById(const std::string &id) override {
+    for (const auto &t : tracks) {
+      if (t.id == id)
+        return t;
+    }
     return std::nullopt;
   }
-  std::optional<core::Track> getTrackByPath(const std::string &) override {
+  std::optional<core::Track> getTrackByPath(const std::string &path) override {
+    for (const auto &t : tracks) {
+      if (t.filePath == path)
+        return t;
+    }
     return std::nullopt;
   }
-  std::vector<core::Track> getAllTracks() override { return {}; }
+  std::vector<core::Track> getAllTracks() override { return tracks; }
   std::vector<core::Track> getTracksByAlbum(const std::string &,
                                             const std::string &) override {
     return {};
   }
-  bool deleteTrack(const std::string &) override { return true; }
+  bool deleteTrack(const std::string &id) override {
+    std::erase_if(tracks, [&](const auto &t) { return t.id == id; });
+    return true;
+  }
   std::vector<core::Album> getAllAlbums() override { return {}; }
   std::optional<core::Album> getAlbumById(const std::string &) override {
     return std::nullopt;
   }
-  bool clearLibrary() override { return true; }
+  bool clearLibrary() override {
+    tracks.clear();
+    return true;
+  }
   bool optimizeDatabase() override { return true; }
-  size_t getTrackCount() override { return 0; }
+  size_t getTrackCount() override { return tracks.size(); }
   size_t getAlbumCount() override { return 0; }
 };
 
@@ -416,4 +438,250 @@ TEST_F(SettingsTest, DiagnosticsAndFactoryReset) {
   EXPECT_FALSE(bridge.lastfmEnabled());
   EXPECT_EQ(bridge.loggingVerbosity(), "Info");
   EXPECT_TRUE(bridge.globalMediaKeysEnabled());
+}
+
+TEST_F(SettingsTest, TrackListModelSelection) {
+  MockDb db;
+  TrackListModel model(&db);
+
+  core::Track t1;
+  t1.id = "t1";
+  t1.title = "Song 1";
+  t1.artist = "Artist 1";
+  t1.durationMs = 180000;
+
+  core::Track t2;
+  t2.id = "t2";
+  t2.title = "Song 2";
+  t2.artist = "Artist 2";
+  t2.durationMs = 240000;
+
+  core::Track t3;
+  t3.id = "t3";
+  t3.title = "Song 3";
+  t3.artist = "Artist 3";
+  t3.durationMs = 200000;
+
+  model.setTracks({t1, t2, t3});
+  EXPECT_EQ(model.rowCount(), 3);
+  EXPECT_EQ(model.selectedCount(), 0);
+
+  // Toggle selection
+  model.toggleSelection(0);
+  EXPECT_TRUE(model.isSelected(0));
+  EXPECT_FALSE(model.isSelected(1));
+  EXPECT_EQ(model.selectedCount(), 1);
+
+  // Set row selected
+  model.setRowSelected(1, true);
+  EXPECT_EQ(model.selectedCount(), 2);
+  EXPECT_TRUE(model.isSelected(1));
+
+  // Invert selection
+  model.invertSelection();
+  EXPECT_EQ(model.selectedCount(), 1);
+  EXPECT_FALSE(model.isSelected(0));
+  EXPECT_FALSE(model.isSelected(1));
+  EXPECT_TRUE(model.isSelected(2));
+
+  // Select all
+  model.selectAll();
+  EXPECT_EQ(model.selectedCount(), 3);
+  EXPECT_TRUE(model.isSelected(0));
+  EXPECT_TRUE(model.isSelected(1));
+  EXPECT_TRUE(model.isSelected(2));
+
+  // Clear selection
+  model.clearSelection();
+  EXPECT_EQ(model.selectedCount(), 0);
+  EXPECT_FALSE(model.isSelected(0));
+
+  // Select range
+  model.selectRange(0, 1);
+  EXPECT_EQ(model.selectedCount(), 2);
+  EXPECT_TRUE(model.isSelected(0));
+  EXPECT_TRUE(model.isSelected(1));
+  EXPECT_FALSE(model.isSelected(2));
+  model.clearSelection();
+
+  // Get selected tracks and remove
+  model.setRowSelected(1, true);
+  auto selectedIds = model.getSelectedTrackIds();
+  EXPECT_EQ(selectedIds.size(), 1);
+  EXPECT_EQ(selectedIds[0].toString(), "t2");
+
+  model.removeSelected();
+  EXPECT_EQ(model.rowCount(), 2);
+  EXPECT_EQ(model.selectedCount(), 0);
+}
+
+TEST_F(SettingsTest, FileAndEditMenuActions) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Undo / Redo initial state
+  EXPECT_FALSE(bridge.canUndo());
+  EXPECT_FALSE(bridge.canRedo());
+
+  // Push custom command
+  bool commandExecuted = false;
+  bridge.pushUndoCommand(
+      "Test Action", [&commandExecuted]() { commandExecuted = false; },
+      [&commandExecuted]() { commandExecuted = true; });
+
+  EXPECT_TRUE(bridge.canUndo());
+  EXPECT_FALSE(bridge.canRedo());
+  EXPECT_EQ(bridge.undoActionName(), "Test Action");
+
+  bridge.undo();
+  EXPECT_FALSE(bridge.canUndo());
+  EXPECT_TRUE(bridge.canRedo());
+  EXPECT_EQ(bridge.redoActionName(), "Test Action");
+
+  bridge.redo();
+  EXPECT_TRUE(bridge.canUndo());
+  EXPECT_FALSE(bridge.canRedo());
+
+  // Export Active View
+  core::Track t;
+  t.id = "test_export";
+  t.title = "Export Title";
+  t.artist = "Export Artist";
+  t.album = "Export Album";
+  t.genre = "Test";
+  t.year = 2024;
+  t.trackNumber = 1;
+  t.durationMs = 120000;
+  t.filePath = "/tmp/test.flac";
+  t.codec = "FLAC";
+  t.bitrate = 1411;
+  bridge.trackModel()->setTracks({t});
+
+  QString m3u8Path = QDir::tempPath() + "/parakeet_test_export.m3u8";
+  QString csvPath = QDir::tempPath() + "/parakeet_test_export.csv";
+  QString jsonPath = QDir::tempPath() + "/parakeet_test_export.json";
+
+  EXPECT_TRUE(bridge.exportActiveView(m3u8Path, "m3u8"));
+  EXPECT_TRUE(QFile::exists(m3u8Path));
+  QFile::remove(m3u8Path);
+
+  EXPECT_TRUE(bridge.exportActiveView(csvPath, "csv"));
+  EXPECT_TRUE(QFile::exists(csvPath));
+  QFile::remove(csvPath);
+
+  EXPECT_TRUE(bridge.exportActiveView(jsonPath, "json"));
+  EXPECT_TRUE(QFile::exists(jsonPath));
+  QFile::remove(jsonPath);
+
+  // Network stream
+  bridge.openNetworkStream("http://stream.example.com/audio.mp3",
+                           "Example Radio");
+  EXPECT_EQ(bridge.currentTrackTitle(), "Example Radio");
+
+  // History Track Model
+  EXPECT_NE(bridge.historyTrackModel(), nullptr);
+  bridge.refreshHistory();
+}
+
+TEST_F(SettingsTest, PlaybackAndLibraryMenuActions) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Playback Rate
+  bridge.setPlaybackRate(1.25);
+  EXPECT_NEAR(bridge.playbackRate(), 1.25, 0.001);
+  bridge.setPlaybackRate(0.5);
+  EXPECT_NEAR(bridge.playbackRate(), 0.5, 0.001);
+  bridge.setPlaybackRate(1.0);
+  EXPECT_NEAR(bridge.playbackRate(), 1.0, 0.001);
+
+  // A-B Looping
+  EXPECT_FALSE(bridge.isLoopActive());
+  bridge.setLoopPointA();
+  EXPECT_GE(bridge.loopPointA(), 0);
+  bridge.setLoopPointB();
+  bridge.clearLoop();
+  EXPECT_FALSE(bridge.isLoopActive());
+  EXPECT_EQ(bridge.loopPointA(), -1);
+  EXPECT_EQ(bridge.loopPointB(), -1);
+
+  // Stop After Current Track
+  EXPECT_FALSE(bridge.stopAfterCurrentTrack());
+  bridge.toggleStopAfterCurrentTrack();
+  EXPECT_TRUE(bridge.stopAfterCurrentTrack());
+  bridge.toggleStopAfterCurrentTrack();
+  EXPECT_FALSE(bridge.stopAfterCurrentTrack());
+
+  // Sleep Timer
+  EXPECT_FALSE(bridge.isSleepTimerActive());
+  bridge.startSleepTimer(15);
+  EXPECT_TRUE(bridge.isSleepTimerActive());
+  EXPECT_EQ(bridge.sleepTimerRemainingSec(), 15 * 60);
+  bridge.cancelSleepTimer();
+  EXPECT_FALSE(bridge.isSleepTimerActive());
+  EXPECT_EQ(bridge.sleepTimerRemainingSec(), 0);
+
+  // Playlist creation
+  EXPECT_TRUE(bridge.createPlaylist("Test_Favorites"));
+  QString plPath =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+      "/playlists/Test_Favorites.m3u8";
+  EXPECT_TRUE(QFile::exists(plPath));
+  QFile::remove(plPath);
+
+  // Smart Playlist creation
+  EXPECT_TRUE(
+      bridge.createSmartPlaylist("High_Bitrate", "{\"genre\":\"Rock\"}"));
+  QString smartPath =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+      "/playlists/High_Bitrate.smart.json";
+  EXPECT_TRUE(QFile::exists(smartPath));
+  QFile::remove(smartPath);
+
+  // Diagnostics
+  auto diag = bridge.audioPipelineDiagnostics();
+  EXPECT_TRUE(diag.contains("sampleRate"));
+  EXPECT_TRUE(diag.contains("bitDepth"));
+  EXPECT_TRUE(diag.contains("codec"));
+  EXPECT_TRUE(diag.contains("audioBackend"));
+  EXPECT_TRUE(diag.contains("isBitPerfect"));
+
+  // Log file path
+  QString logPath = bridge.getLogFilePath();
+  EXPECT_TRUE(logPath.endsWith("parakeet.log"));
+  EXPECT_TRUE(QFile::exists(logPath));
+
+  // Deduplicate tracks
+  core::Track t1;
+  t1.id = "dup_1";
+  t1.title = "Duplicate Song";
+  t1.artist = "Duplicate Artist";
+  t1.durationMs = 180000;
+
+  core::Track t2;
+  t2.id = "dup_2";
+  t2.title = "Duplicate Song";
+  t2.artist = "Duplicate Artist";
+  t2.durationMs = 180000;
+
+  db.saveTrack(t1);
+  db.saveTrack(t2);
+
+  int removed = bridge.deduplicateTracks();
+  EXPECT_GE(removed, 1);
+  EXPECT_TRUE(bridge.canUndo());
+  bridge.undo();
+  EXPECT_TRUE(bridge.canRedo());
+  bridge.redo();
 }

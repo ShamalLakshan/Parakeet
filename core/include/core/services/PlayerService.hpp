@@ -69,6 +69,18 @@ public:
     return m_queueService.getShuffleMode();
   }
 
+  void setPlaybackRate(float rate) {
+    if (m_audioEngine) {
+      m_audioEngine->setPlaybackRate(rate);
+    }
+  }
+  [[nodiscard]] float getPlaybackRate() const {
+    if (m_audioEngine) {
+      return m_audioEngine->getPlaybackRate();
+    }
+    return 1.0f;
+  }
+
   [[nodiscard]] PlaybackState getState() const { return m_state; }
   [[nodiscard]] bool isPlaying() const {
     return m_state == PlaybackState::Playing;
