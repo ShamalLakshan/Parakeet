@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 import "../components"
 
 Rectangle {
@@ -30,7 +31,7 @@ Rectangle {
             "Jazz": [3.0, 2.0, 1.0, 1.5, -1.0, -1.0, 0.0, 1.5, 2.5, 3.5],
             "Classical": [4.0, 3.0, 2.0, 1.5, -1.0, -1.0, 0.0, 2.0, 3.0, 3.5],
             "Vocal": [-2.0, -1.0, 0.0, 2.5, 4.0, 3.5, 2.0, 0.5, -1.0, -2.0],
-            "Audiophile Reference": [0.5, 0.2, 0.0, -0.2, -0.2, 0.0, 0.2, 0.4, 0.5, 0.5]
+            "Reference": [0.5, 0.2, 0.0, -0.2, -0.2, 0.0, 0.2, 0.4, 0.5, 0.5]
         };
         if (presets[name]) {
             var arr = [];
@@ -113,7 +114,7 @@ Rectangle {
                     id: presetCombo
                     Layout.preferredWidth: 160
                     Layout.preferredHeight: 28
-                    model: ["Flat", "Rock", "Pop", "Jazz", "Classical", "Vocal", "Bass Boost", "Treble Boost", "Audiophile Reference"]
+                    model: ["Flat", "Rock", "Pop", "Jazz", "Classical", "Vocal", "Bass Boost", "Treble Boost", "Reference"]
                     onActivated: function(index) {
                         root.setPreset(model[index]);
                     }

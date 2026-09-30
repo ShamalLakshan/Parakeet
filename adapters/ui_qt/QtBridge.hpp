@@ -46,7 +46,7 @@ class QtBridge : public QObject {
   Q_PROPERTY(TrackListModel *queueTrackModel READ queueTrackModel CONSTANT)
   Q_PROPERTY(TrackListModel *historyTrackModel READ historyTrackModel CONSTANT)
 
-  // Theming Engine
+  // Theming
   Q_PROPERTY(adapters::ThemeLoader *theme READ theme CONSTANT)
 
   // Current Playing Track State
@@ -867,14 +867,14 @@ private:
   std::vector<UndoCommand> m_undoStack;
   std::vector<UndoCommand> m_redoStack;
 
-  // Playback state (idle by default)
-  QString m_currentTrackTitle{"No Track Selected"};
+  // Playback state
+  QString m_currentTrackTitle{""};
   QString m_currentArtist{""};
   QString m_currentAlbum{""};
   QString m_currentYear{""};
   QString m_currentGenre{""};
   QString m_currentCodec{""};
-  QString m_currentAudioSpecs{"Engine Idle • Ready"};
+  QString m_currentAudioSpecs{""};
   QString m_currentArtHash{""};
   QString m_currentFilePath{""};
   QString m_currentFileSizeStr{""};
@@ -893,7 +893,7 @@ private:
 
   // Scanning state
   std::atomic<bool> m_isScanning{false};
-  QString m_scanStatusText{"Ready"};
+  QString m_scanStatusText{""};
   int m_scanScanned{0};
   int m_scanTotal{0};
 

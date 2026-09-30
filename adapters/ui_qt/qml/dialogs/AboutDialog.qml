@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 import "../components"
 
 Dialog {
@@ -147,20 +148,20 @@ Dialog {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Text { text: "Architecture:"; font.pixelSize: Theme.fontSizeSmall; color: Theme.textSecondary; Layout.preferredWidth: 120 }
-                    Text { text: "Hexagonal Ports & Adapters (C++20 / Qt 6)"; font.pixelSize: Theme.fontSizeSmall; font.bold: true; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
+                    Text { text: "Version:"; font.pixelSize: Theme.fontSizeSmall; color: Theme.textSecondary; Layout.preferredWidth: 120 }
+                    Text { text: "0.1.0"; font.pixelSize: Theme.fontSizeSmall; font.bold: true; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Text { text: "Audio Engine:"; font.pixelSize: Theme.fontSizeSmall; color: Theme.textSecondary; Layout.preferredWidth: 120 }
-                    Text { text: "Bit-Perfect Low-Latency Pipeline"; font.pixelSize: Theme.fontSizeSmall; font.bold: true; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
+                    Text { text: "Platform:"; font.pixelSize: Theme.fontSizeSmall; color: Theme.textSecondary; Layout.preferredWidth: 120 }
+                    Text { text: "Linux (ALSA / PipeWire / PulseAudio)"; font.pixelSize: Theme.fontSizeSmall; font.bold: true; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
                     Text { text: "License:"; font.pixelSize: Theme.fontSizeSmall; color: Theme.textSecondary; Layout.preferredWidth: 120 }
-                    Text { text: "MIT License (Open Source)"; font.pixelSize: Theme.fontSizeSmall; font.bold: true; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
+                    Text { text: "GNU AGPL v3"; font.pixelSize: Theme.fontSizeSmall; font.bold: true; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
                 }
 
                 RowLayout {

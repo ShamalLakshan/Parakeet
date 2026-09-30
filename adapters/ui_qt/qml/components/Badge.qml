@@ -30,7 +30,7 @@ Rectangle {
 
     Layout.preferredWidth: implicitWidth
     Layout.preferredHeight: implicitHeight
-    Layout.maximumWidth: maxWidth > 0 ? maxWidth : undefined
+    Layout.maximumWidth: maxWidth > 0 ? maxWidth : Number.POSITIVE_INFINITY
     Layout.alignment: Qt.AlignVCenter
 
     color: badgeColor

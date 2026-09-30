@@ -10,7 +10,10 @@ Menu {
     property string targetTitle: ""
     property string targetArtist: ""
 
-    signal viewAudiophileSpecsRequested()
+    signal viewTrackPropertiesRequested()
+    signal viewAlbumRequested(string album, string artist)
+    signal editTagsRequested(var track)
+    signal deleteTracksRequested(var tracks)
 
     background: Rectangle {
         implicitWidth: 200
@@ -78,12 +81,20 @@ Menu {
     }
 
     ContextMenuItem {
-        text: "Add to Queue (Queue Last)"
+        text: "Add to Queue"
         visible: root.menuType === "track"
         onTriggered: {
             if (root.targetTrack && root.targetTrack.id) {
                 bridge.queueLast(root.targetTrack.id);
             }
+        }
+    }
+
+    ContextMenuItem {
+        text: "Go to Album"
+        visible: root.menuType === "track" && root.targetTrack && root.targetTrack.album && root.targetTrack.album.length > 0
+        onTriggered: {
+            root.viewAlbumRequested(root.targetTrack.album, root.targetTrack.artist);
         }
     }
 
@@ -102,15 +113,15 @@ Menu {
     }
 
     ContextMenuItem {
-        text: "View Audiophile Specs"
+        text: "Track Properties"
         visible: root.menuType === "track"
         onTriggered: {
-            root.viewAudiophileSpecsRequested();
+            root.viewTrackPropertiesRequested();
         }
     }
 
     ContextMenuItem {
-        text: "Copy Audio File Path"
+        text: "Copy File Path"
         visible: root.menuType === "track"
         onTriggered: {
             if (root.targetFilePath.length > 0) {
@@ -120,7 +131,7 @@ Menu {
     }
 
     ContextMenuItem {
-        text: "Copy Track Information"
+        text: "Copy Track Info"
         visible: root.menuType === "track"
         onTriggered: {
             var info = root.targetArtist + " - " + root.targetTitle;
@@ -129,15 +140,15 @@ Menu {
     }
 
     ContextMenuItem {
-        text: "Edit Track Tags... (Ctrl+T)"
+        text: "Edit Tags..."
         visible: root.menuType === "track"
-        onTriggered: root.editTagsRequested()
+        onTriggered: root.editTagsRequested(root.targetTrack)
     }
 
     ContextMenuItem {
-        text: "Delete / Remove (Delete)"
+        text: "Remove from Library"
         visible: root.menuType === "track"
-        onTriggered: root.deleteTrackRequested()
+        onTriggered: root.deleteTracksRequested(root.targetTrack ? [root.targetTrack] : [])
     }
 
     ContextMenuSeparator {
@@ -145,7 +156,7 @@ Menu {
     }
 
     ContextMenuItem {
-        text: "Purge Non-Existent Files"
+        text: "Remove Missing Files"
         visible: root.menuType === "track" || root.menuType === "explorer"
         onTriggered: bridge.purgeMissingTracks()
     }
