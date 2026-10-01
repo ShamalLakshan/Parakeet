@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
+import ".."
 import "../components"
 
 Dialog {
@@ -128,14 +129,14 @@ Dialog {
                     Layout.fillWidth: true
 
                     Text {
-                        text: diag && diag.isBitPerfect ? "BIT-PERFECT DIRECT PIPELINE ACTIVE" : "SHARED PIPELINE MODE"
+                        text: diag && diag.isBitPerfect ? "Bit-Perfect Output Active" : "Shared Output Mode"
                         font.pixelSize: Theme.fontSizeSmall
                         font.bold: true
                         color: Theme.textPrimary
                     }
 
                     Text {
-                        text: diag && diag.isBitPerfect ? "Zero DSP distortion • Integer output • OS mixer bypassed" : "Managed audio stream with OS mixer integration"
+                        text: diag && diag.isBitPerfect ? "Integer stream • OS mixer bypassed" : "Standard output stream via system mixer"
                         font.pixelSize: 10
                         color: Theme.textMuted
                     }
@@ -152,7 +153,7 @@ Dialog {
                     Text {
                         id: stateText
                         anchors.centerIn: parent
-                        text: diag ? (diag.state || "IDLE") : "IDLE"
+                        text: diag ? (diag.state || "Stopped") : "Stopped"
                         font.pixelSize: 10
                         font.bold: true
                         color: Theme.accentHover
@@ -250,7 +251,7 @@ Dialog {
                 }
 
                 DiagRow {
-                    label: "Resampler Engine"
+                    label: "Resampler"
                     value: diag ? (diag.resamplerQuality || "Bit-Exact (No Resampling)") : "Bit-Exact"
                 }
 
@@ -271,7 +272,7 @@ Dialog {
 
                 DiagRow {
                     Layout.columnSpan: 2
-                    label: "A-B Looping State"
+                    label: "A-B Looping"
                     value: diag && diag.loopActive ? ("Active (" + (diag.loopPointA / 1000).toFixed(1) + "s -> " + (diag.loopPointB / 1000).toFixed(1) + "s)") : "Inactive"
                 }
             }

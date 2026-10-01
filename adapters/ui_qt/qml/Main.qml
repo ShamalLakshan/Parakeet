@@ -24,13 +24,64 @@ ApplicationWindow {
     property bool showEqualizer: false
     property bool isMiniPlayer: false
     property real normalWidth: 1400
-    property real normalHeight: 840
     property int mainViewMode: 1 // 0: Album Grid, 1: Track Details Table, 2: Album & Tracks View, 3: Listening History
+    property int previousViewMode: 0
     property int activeNavSection: 0 // 0: All Tracks, 1: Albums, 2: Artists, 3: Genres, 4: Now Playing
     property string activeLetterFilter: "All"
     property string selectedGenreFilter: "All"
     property string selectedArtistFilter: "All"
     property int rightPanelTab: 0 // 0: Properties, 1: Queue
+
+    function switchToExpandedView(albumTitle, albumArtist) {
+        if (albumTitle && albumTitle.length > 0) {
+            bridge.openAlbumDetails(albumTitle, albumArtist ? albumArtist : "");
+        } else if (bridge.selectedAlbumTitle.length === 0) {
+            if (bridge.currentAlbum.length > 0) {
+                bridge.openAlbumDetails(bridge.currentAlbum, bridge.currentArtist);
+            } else if (bridge.albumModel.count > 0) {
+                var firstAlb = bridge.albumModel.getAlbumAt(0);
+                if (firstAlb && firstAlb.title) {
+                    bridge.openAlbumDetails(firstAlb.title, firstAlb.artist);
+                }
+            }
+        }
+        if (mainViewMode !== 2) {
+            previousViewMode = mainViewMode;
+        }
+        mainViewMode = 2;
+        activeNavSection = 1;
+    }
+
+    function switchToNowPlaying() {
+        rightPanelTab = 1;
+        showRightPanel = true;
+        activeNavSection = 4;
+        if (bridge.currentAlbum.length > 0) {
+            bridge.openAlbumDetails(bridge.currentAlbum, bridge.currentArtist);
+            if (mainViewMode !== 2) {
+                previousViewMode = mainViewMode;
+            }
+            mainViewMode = 2;
+        }
+    }
+
+    function switchViewMode(mode) {
+        if (mode === 2) {
+            switchToExpandedView();
+            return;
+        }
+        if (mainViewMode === 2) {
+            previousViewMode = 2;
+        }
+        mainViewMode = mode;
+        if (mode === 1) {
+            activeNavSection = 0;
+        } else if (mode === 0) {
+            activeNavSection = 1;
+        } else if (mode === 3) {
+            bridge.refreshHistory();
+        }
+    }
 
     function toggleMiniPlayer() {
         if (!isMiniPlayer) {
@@ -158,9 +209,12 @@ ApplicationWindow {
     ContextMenu {
         id: trackContextMenu
         menuType: "track"
-        onViewAudiophileSpecsRequested: {
+        onViewTrackPropertiesRequested: {
             showRightPanel = true;
             rightPanelTab = 0;
+        }
+        onViewAlbumRequested: (album, artist) => {
+            switchToExpandedView(album, artist);
         }
         onEditTagsRequested: (track) => {
             var sel = bridge.trackModel.getSelectedTracks();
@@ -300,10 +354,10 @@ ApplicationWindow {
         }
     }
     Shortcut { sequence: "Ctrl+5"; onActivated: showEqualizer = !showEqualizer }
-    Shortcut { sequence: "Alt+1"; onActivated: mainViewMode = 1 }
-    Shortcut { sequence: "Alt+2"; onActivated: mainViewMode = 0 }
-    Shortcut { sequence: "Alt+3"; onActivated: mainViewMode = 2 }
-    Shortcut { sequence: "Alt+4"; onActivated: { bridge.refreshHistory(); mainViewMode = 3; } }
+    Shortcut { sequence: "Alt+1"; onActivated: switchViewMode(1) }
+    Shortcut { sequence: "Alt+2"; onActivated: switchViewMode(0) }
+    Shortcut { sequence: "Alt+3"; onActivated: switchViewMode(2) }
+    Shortcut { sequence: "Alt+4"; onActivated: switchViewMode(3) }
     Shortcut { sequence: "Ctrl+Shift+M"; onActivated: toggleMiniPlayer() }
     Shortcut { sequence: "F10"; onActivated: toggleMiniPlayer() }
     Shortcut { sequence: "F11"; onActivated: toggleFullscreen() }
@@ -589,28 +643,25 @@ ApplicationWindow {
                                     text: "Track Details Table (Alt+1)"
                                     checkable: true
                                     checked: mainViewMode === 1
-                                    onTriggered: mainViewMode = 1
+                                    onTriggered: switchViewMode(1)
                                 }
                                 MenuItem {
                                     text: "Album Grid (Alt+2)"
                                     checkable: true
                                     checked: mainViewMode === 0
-                                    onTriggered: mainViewMode = 0
+                                    onTriggered: switchViewMode(0)
                                 }
                                 MenuItem {
-                                    text: "Album & Tracks View (Alt+3)"
+                                    text: "Album Details & Tracks (Alt+3)"
                                     checkable: true
                                     checked: mainViewMode === 2
-                                    onTriggered: mainViewMode = 2
+                                    onTriggered: switchViewMode(2)
                                 }
                                 MenuItem {
                                     text: "Listening History (Alt+4)"
                                     checkable: true
                                     checked: mainViewMode === 3
-                                    onTriggered: {
-                                        bridge.refreshHistory();
-                                        mainViewMode = 3;
-                                    }
+                                    onTriggered: switchViewMode(3)
                                 }
                             }
                             MenuItem {
@@ -1073,37 +1124,6 @@ ApplicationWindow {
                 }
 
                 Item { Layout.fillWidth: true }
-
-                // Audio Engine Status Pill
-                Rectangle {
-                    Layout.preferredHeight: 18
-                    Layout.preferredWidth: engineStatusLayout.implicitWidth + 14
-                    Layout.alignment: Qt.AlignVCenter
-                    radius: Theme.cornerRadiusSmall
-                    color: Theme.surfaceElevated
-                    border.color: Theme.panelBorder
-                    clip: true
-
-                    RowLayout {
-                        id: engineStatusLayout
-                        anchors.centerIn: parent
-                        spacing: 6
-
-                        Rectangle {
-                            width: 6
-                            height: 6
-                            radius: 3
-                            color: bridge.isPlaying ? Theme.success : Theme.textMuted
-                        }
-
-                        Text {
-                            text: bridge.isPlaying ? "BIT-PERFECT OUTPUT • PLAYING" : "BIT-PERFECT OUTPUT • IDLE"
-                            font.pixelSize: 9
-                            font.bold: true
-                            color: bridge.isPlaying ? Theme.textPrimary : Theme.textMuted
-                        }
-                    }
-                }
             }
         }
 
@@ -1128,19 +1148,26 @@ ApplicationWindow {
 
                     Repeater {
                         model: [
-                            { name: "ALL TRACKS", icon: "table", mode: 1, nav: 0 },
-                            { name: "ALBUMS", icon: "grid", mode: 0, nav: 1 },
-                            { name: "EXPANDED", icon: "album_tracks", mode: 2, nav: 0 },
-                            { name: "NOW PLAYING", icon: "queue", mode: 1, nav: 4 }
+                            { name: "ALL TRACKS", icon: "table", mode: 1 },
+                            { name: "ALBUMS", icon: "grid", mode: 0 },
+                            { name: "EXPANDED", icon: "album_tracks", mode: 2 },
+                            { name: "NOW PLAYING", icon: "queue", mode: -1 }
                         ]
 
                         delegate: Rectangle {
+                            property bool isTabActive: {
+                                if (modelData.mode === -1) {
+                                    return activeNavSection === 4 && showRightPanel && rightPanelTab === 1;
+                                }
+                                return mainViewMode === modelData.mode;
+                            }
+
                             Layout.preferredWidth: tabRowLayout.implicitWidth + 16
                             Layout.preferredHeight: 30
                             Layout.alignment: Qt.AlignVCenter
                             radius: 3
-                            color: (activeNavSection === modelData.nav && mainViewMode === modelData.mode) ? Theme.selection : (tabMouse.containsMouse ? Theme.surfaceElevated : "transparent")
-                            border.color: (activeNavSection === modelData.nav && mainViewMode === modelData.mode) ? Theme.panelBorder : "transparent"
+                            color: isTabActive ? Theme.selection : (tabMouse.containsMouse ? Theme.surfaceElevated : "transparent")
+                            border.color: isTabActive ? Theme.panelBorder : "transparent"
                             border.width: 1
                             clip: true
 
@@ -1153,7 +1180,7 @@ ApplicationWindow {
                                     name: modelData.icon
                                     width: 12
                                     height: 12
-                                    color: (activeNavSection === modelData.nav && mainViewMode === modelData.mode) ? Theme.accent : Theme.textMuted
+                                    color: isTabActive ? Theme.accent : Theme.textMuted
                                 }
 
                                 Text {
@@ -1161,7 +1188,7 @@ ApplicationWindow {
                                     font.pixelSize: 11
                                     font.bold: true
                                     font.letterSpacing: 0.8
-                                    color: (activeNavSection === modelData.nav && mainViewMode === modelData.mode) ? Theme.textPrimary : Theme.textSecondary
+                                    color: isTabActive ? Theme.textPrimary : Theme.textSecondary
                                 }
                             }
 
@@ -1171,8 +1198,15 @@ ApplicationWindow {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
-                                    activeNavSection = modelData.nav;
-                                    mainViewMode = modelData.mode;
+                                    if (modelData.mode === 1) {
+                                        switchViewMode(1);
+                                    } else if (modelData.mode === 0) {
+                                        switchViewMode(0);
+                                    } else if (modelData.mode === 2) {
+                                        switchToExpandedView();
+                                    } else if (modelData.mode === -1) {
+                                        switchToNowPlaying();
+                                    }
                                 }
                             }
                         }
@@ -1508,12 +1542,10 @@ ApplicationWindow {
                                             Layout.fillWidth: true
                                         }
 
-                                        Badge {
+                                        Text {
                                             text: "" + modelData.count
-                                            fontSize: 9
-                                            badgeColor: activeNavSection === modelData.nav ? Theme.selection : Theme.surfaceElevated
-                                            badgeBorderColor: "transparent"
-                                            textColor: activeNavSection === modelData.nav ? Theme.accentHover : Theme.textMuted
+                                            font.pixelSize: 10
+                                            color: activeNavSection === modelData.nav ? Theme.textPrimary : Theme.textMuted
                                         }
                                     }
 
@@ -1525,7 +1557,11 @@ ApplicationWindow {
                                         onClicked: {
                                             activeNavSection = modelData.nav;
                                             mainViewMode = modelData.mode;
-                                            bridge.resetFilters();
+                                            if (modelData.nav === 2 || modelData.nav === 3) {
+                                                showColumnBrowser = true;
+                                            } else {
+                                                bridge.resetFilters();
+                                            }
                                         }
                                     }
                                 }
@@ -1601,107 +1637,7 @@ ApplicationWindow {
                                 }
                             }
 
-                            // Section: QUALITY FILTERS
-                            Item { height: 10; width: 1 }
-                            Text {
-                                text: "  QUALITY TIERS"
-                                font.pixelSize: 9
-                                font.bold: true
-                                font.letterSpacing: 1.0
-                                color: Theme.textMuted
-                                Layout.leftMargin: 8
-                            }
-
-                            Repeater {
-                                model: [
-                                    { name: "Hi-Res Audio (24-bit)", filter: "Hi-Res" },
-                                    { name: "Lossless FLAC", filter: "FLAC" },
-                                    { name: "Standard (MP3/AAC)", filter: "MP3" }
-                                ]
-
-                                delegate: Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 24
-                                    color: qfMouse.containsMouse ? Theme.surfaceElevated : "transparent"
-
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.leftMargin: 20
-                                        anchors.rightMargin: 10
-                                        spacing: 6
-                                        Rectangle { width: 4; height: 4; radius: 2; color: Theme.textMuted }
-                                        Text { text: modelData.name; font.pixelSize: 10; color: Theme.textSecondary; Layout.fillWidth: true }
-                                    }
-                                    MouseArea {
-                                        id: qfMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: bridge.search(modelData.filter)
-                                    }
-                                }
-                            }
-
                             Item { Layout.fillHeight: true }
-                        }
-                    }
-
-                    // Mini Now-Playing Summary Card at bottom of Left Panel
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 68
-                        color: Theme.surfaceElevated
-                        border.color: Theme.panelBorder
-                        border.width: 1
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 8
-                            spacing: 8
-
-                            Rectangle {
-                                width: 48
-                                height: 48
-                                color: Theme.background
-                                border.color: Theme.panelBorder
-                                border.width: 1
-                                clip: true
-
-                                Image {
-                                    anchors.fill: parent
-                                    source: bridge.currentArtUrl
-                                    fillMode: Image.PreserveAspectCrop
-                                }
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 2
-
-                                Text {
-                                    text: bridge.currentTrackTitle
-                                    font.pixelSize: 11
-                                    font.bold: true
-                                    color: Theme.textPrimary
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-
-                                Text {
-                                    text: bridge.currentArtist
-                                    font.pixelSize: 10
-                                    color: Theme.textMuted
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-
-                                Text {
-                                    text: bridge.currentCodec + (bridge.currentBitDepth > 0 ? " " + bridge.currentBitDepth + "-bit" : "")
-                                    font.pixelSize: 9
-                                    font.bold: true
-                                    color: Theme.accent
-                                }
-                            }
                         }
                     }
                 }
@@ -1755,8 +1691,10 @@ ApplicationWindow {
                                     VectorIcon { anchors.centerIn: parent; name: "table"; width: 12; height: 12; color: mainViewMode === 1 ? Theme.accent : Theme.textMuted }
                                     MouseArea {
                                         id: vm1Mouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                        onClicked: mainViewMode = 1
+                                        onClicked: switchViewMode(1)
                                     }
+                                    ToolTip.visible: vm1Mouse.containsMouse
+                                    ToolTip.text: "Track Details Table (Alt+1)"
                                 }
 
                                 Rectangle {
@@ -1770,8 +1708,10 @@ ApplicationWindow {
                                     VectorIcon { anchors.centerIn: parent; name: "grid"; width: 12; height: 12; color: mainViewMode === 0 ? Theme.accent : Theme.textMuted }
                                     MouseArea {
                                         id: vm0Mouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                        onClicked: mainViewMode = 0
+                                        onClicked: switchViewMode(0)
                                     }
+                                    ToolTip.visible: vm0Mouse.containsMouse
+                                    ToolTip.text: "Album Grid View (Alt+2)"
                                 }
 
                                 Rectangle {
@@ -1785,8 +1725,10 @@ ApplicationWindow {
                                     VectorIcon { anchors.centerIn: parent; name: "album_tracks"; width: 12; height: 12; color: mainViewMode === 2 ? Theme.accent : Theme.textMuted }
                                     MouseArea {
                                         id: vm2Mouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                        onClicked: mainViewMode = 2
+                                        onClicked: switchViewMode(2)
                                     }
+                                    ToolTip.visible: vm2Mouse.containsMouse
+                                    ToolTip.text: "Album Details & Tracks (Alt+3)"
                                 }
                             }
 
@@ -1872,7 +1814,16 @@ ApplicationWindow {
 
                             // Item counter
                             Text {
-                                text: bridge.trackModel.count + " tracks"
+                                text: {
+                                    if (mainViewMode === 0) {
+                                        return bridge.albumModel.count + " albums";
+                                    } else if (mainViewMode === 2) {
+                                        return (bridge.selectedAlbumTrackCount > 0 ? (bridge.selectedAlbumTrackCount + " tracks • " + bridge.selectedAlbumDuration) : "Album Details");
+                                    } else if (mainViewMode === 3) {
+                                        return bridge.historyTrackModel.count + " played";
+                                    }
+                                    return bridge.trackModel.count + " tracks";
+                                }
                                 font.pixelSize: 10
                                 color: Theme.textMuted
                             }
@@ -2039,6 +1990,8 @@ ApplicationWindow {
                                                 anchors.fill: parent
                                                 anchors.leftMargin: 8
                                                 anchors.rightMargin: 8
+                                                spacing: 4
+
                                                 Text {
                                                     text: model.title
                                                     font.pixelSize: 10
@@ -2046,10 +1999,19 @@ ApplicationWindow {
                                                     elide: Text.ElideRight
                                                     Layout.fillWidth: true
                                                 }
+
                                                 Text {
                                                     text: model.trackCount
                                                     font.pixelSize: 9
                                                     color: Theme.textMuted
+                                                }
+
+                                                VectorIcon {
+                                                    visible: albColMouse.containsMouse
+                                                    name: "album_tracks"
+                                                    width: 10
+                                                    height: 10
+                                                    color: Theme.accent
                                                 }
                                             }
 
@@ -2059,9 +2021,13 @@ ApplicationWindow {
                                                 hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
                                                 onClicked: {
-                                                    bridge.openAlbumDetails(model.title, model.artist);
-                                                    mainViewMode = 2;
+                                                    bridge.search(model.title);
                                                 }
+                                                onDoubleClicked: {
+                                                    switchToExpandedView(model.title, model.artist);
+                                                }
+                                                ToolTip.visible: albColMouse.containsMouse
+                                                ToolTip.text: "Click to filter table • Double-click to expand album"
                                             }
                                         }
                                     }
@@ -2197,13 +2163,26 @@ ApplicationWindow {
                                                 Layout.fillHeight: true
                                                 clip: true
                                                 Text {
+                                                    id: albRowText
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     anchors.left: parent.left
                                                     anchors.right: parent.right
                                                     text: model.album
                                                     font.pixelSize: 11
-                                                    color: Theme.textMuted
+                                                    font.underline: albTextMouse.containsMouse
+                                                    color: albTextMouse.containsMouse ? Theme.accentHover : Theme.textMuted
                                                     elide: Text.ElideRight
+                                                }
+                                                MouseArea {
+                                                    id: albTextMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        switchToExpandedView(model.album, model.artist);
+                                                    }
+                                                    ToolTip.visible: albTextMouse.containsMouse
+                                                    ToolTip.text: "Expand " + model.album
                                                 }
                                             }
 
@@ -2241,13 +2220,13 @@ ApplicationWindow {
                                                 Layout.fillHeight: true
                                                 clip: true
 
-                                                Badge {
+                                                Text {
                                                     anchors.verticalCenter: parent.verticalCenter
-                                                    maxWidth: 70
                                                     text: model.codec + (model.bitDepth > 16 ? " " + model.bitDepth + "b" : "")
-                                                    badgeColor: model.codec === "FLAC" ? Theme.selection : Theme.surfaceElevated
-                                                    badgeBorderColor: model.codec === "FLAC" ? Theme.accent : Theme.panelBorder
-                                                    textColor: model.codec === "FLAC" ? Theme.accentHover : Theme.textMuted
+                                                    font.pixelSize: 10
+                                                    font.weight: Font.Medium
+                                                    color: Theme.textSecondary
+                                                    elide: Text.ElideRight
                                                 }
                                             }
 
@@ -2367,22 +2346,7 @@ ApplicationWindow {
                                             asynchronous: true
                                         }
 
-                                        // Quality Badge
-                                        Badge {
-                                            anchors.top: parent.top
-                                            anchors.right: parent.right
-                                            anchors.margins: 4
-                                            maxWidth: parent.width - 8
-                                            text: model.qualityBadge === "Hi-Res Lossless" ? "HI-RES" : "LOSSLESS"
-                                            fontSize: 8
-                                            bold: true
-                                            badgeColor: model.qualityBadge === "Hi-Res Lossless" ? Theme.selection : Theme.surfaceElevated
-                                            borderColor: model.qualityBadge === "Hi-Res Lossless" ? Theme.accent : Theme.panelBorder
-                                            textColor: model.qualityBadge === "Hi-Res Lossless" ? Theme.accentHover : Theme.textSecondary
-                                            horizontalPadding: 4
-                                            verticalPadding: 2
-                                            radius: 2
-                                        }
+
 
                                         // Hover Play Button
                                         Rectangle {
@@ -2450,8 +2414,7 @@ ApplicationWindow {
                                             trackContextMenu.targetFilePath = "";
                                             trackContextMenu.popup();
                                         } else {
-                                            bridge.openAlbumDetails(model.title, model.artist);
-                                            mainViewMode = 2;
+                                            switchToExpandedView(model.title, model.artist);
                                         }
                                     }
                                     onDoubleClicked: {
@@ -2468,132 +2431,324 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         visible: mainViewMode === 2
 
+                        // Empty State if no album is selected
+                        Rectangle {
+                            anchors.fill: parent
+                            color: Theme.surface
+                            visible: bridge.selectedAlbumTitle.length === 0
+
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: 14
+
+                                VectorIcon {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    name: "album_tracks"
+                                    width: 44
+                                    height: 44
+                                    color: Theme.textMuted
+                                }
+
+                                Text {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: "No Album Selected"
+                                    font.pixelSize: 15
+                                    font.bold: true
+                                    color: Theme.textPrimary
+                                }
+
+                                Text {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: "Choose an album from the Album Grid or Track List to view its artwork and complete tracklist."
+                                    font.pixelSize: 11
+                                    color: Theme.textMuted
+                                }
+
+                                RowLayout {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    spacing: 10
+
+                                    Rectangle {
+                                        width: emptyBrowseText.implicitWidth + 24
+                                        height: 30
+                                        radius: 3
+                                        color: emptyBrowseMouse.containsMouse ? Theme.accentHover : Theme.accent
+
+                                        RowLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 6
+                                            VectorIcon { name: "grid"; width: 12; height: 12; color: Theme.textPrimary }
+                                            Text { id: emptyBrowseText; text: "Browse Album Grid"; font.pixelSize: 11; font.bold: true; color: Theme.textPrimary }
+                                        }
+
+                                        MouseArea {
+                                            id: emptyBrowseMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: switchViewMode(0)
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        visible: bridge.currentAlbum.length > 0
+                                        width: emptyNowPlayingText.implicitWidth + 24
+                                        height: 30
+                                        radius: 3
+                                        color: emptyNpMouse.containsMouse ? Theme.selection : Theme.surfaceElevated
+                                        border.color: Theme.panelBorder
+
+                                        RowLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 6
+                                            VectorIcon { name: "play"; width: 10; height: 10; color: Theme.accent }
+                                            Text { id: emptyNowPlayingText; text: "View Playing Album"; font.pixelSize: 11; color: Theme.textPrimary }
+                                        }
+
+                                        MouseArea {
+                                            id: emptyNpMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (bridge.currentAlbum.length > 0) {
+                                                    switchToExpandedView(bridge.currentAlbum, bridge.currentArtist);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Loaded Album Details
                         ColumnLayout {
                             anchors.fill: parent
                             spacing: 0
+                            visible: bridge.selectedAlbumTitle.length > 0
 
                             // Album header
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 140
+                                Layout.preferredHeight: 148
                                 color: Theme.surface
                                 border.color: Theme.panelBorder
                                 border.width: 1
 
-                                RowLayout {
+                                ColumnLayout {
                                     anchors.fill: parent
                                     anchors.margins: 12
-                                    spacing: 16
+                                    spacing: 8
 
-                                    Rectangle {
-                                        width: 116
-                                        height: 116
-                                        color: Theme.background
-                                        border.color: Theme.panelBorder
-                                        clip: true
-
-                                        Image {
-                                            anchors.fill: parent
-                                            source: "image://albumart/" + (bridge.selectedAlbumArtHash ? bridge.selectedAlbumArtHash : "default")
-                                            fillMode: Image.PreserveAspectCrop
-                                        }
-                                    }
-
-                                    ColumnLayout {
+                                    // Breadcrumb navigation row
+                                    RowLayout {
                                         Layout.fillWidth: true
-                                        spacing: 4
+                                        spacing: 8
 
-                                        RowLayout {
-                                            Layout.fillWidth: true
-                                            spacing: 8
+                                        Rectangle {
+                                            width: backBreadcrumbText.implicitWidth + 16
+                                            height: 22
+                                            radius: 2
+                                            color: backBreadcrumbMouse.containsMouse ? Theme.selection : Theme.surfaceElevated
+                                            border.color: Theme.panelBorder
 
-                                            Text {
-                                                text: bridge.selectedAlbumTitle.length > 0 ? bridge.selectedAlbumTitle : "Select an Album"
-                                                font.pixelSize: 18
-                                                font.bold: true
-                                                color: Theme.textPrimary
-                                                elide: Text.ElideRight
-                                                Layout.fillWidth: true
+                                            RowLayout {
+                                                anchors.centerIn: parent
+                                                spacing: 4
+                                                VectorIcon { name: "previous"; width: 9; height: 9; color: Theme.accent }
+                                                Text {
+                                                    id: backBreadcrumbText
+                                                    text: previousViewMode === 1 ? "Track List" : "Albums"
+                                                    font.pixelSize: 10
+                                                    font.bold: true
+                                                    color: Theme.textSecondary
+                                                }
                                             }
 
-                                            Badge {
-                                                text: bridge.selectedAlbumQuality
-                                                visible: text.length > 0
-                                                fontSize: 9
-                                                bold: true
-                                                badgeColor: Theme.selection
-                                                borderColor: Theme.accent
-                                                textColor: Theme.accentHover
-                                                maxWidth: 160
-                                                Layout.alignment: Qt.AlignVCenter
+                                            MouseArea {
+                                                id: backBreadcrumbMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: switchViewMode(previousViewMode)
                                             }
                                         }
 
                                         Text {
-                                            text: bridge.selectedAlbumArtist + (bridge.selectedAlbumYear ? " (" + bridge.selectedAlbumYear + ")" : "")
-                                            font.pixelSize: 13
+                                            text: "›"
+                                            font.pixelSize: 11
+                                            color: Theme.textMuted
+                                        }
+
+                                        Text {
+                                            text: bridge.selectedAlbumTitle
+                                            font.pixelSize: 10
+                                            font.bold: true
                                             color: Theme.accent
                                             elide: Text.ElideRight
                                             Layout.fillWidth: true
                                         }
+                                    }
 
-                                        Text {
-                                            text: (bridge.selectedAlbumGenre ? bridge.selectedAlbumGenre + " • " : "") +
-                                                  bridge.selectedAlbumTrackCount + " Tracks • " +
-                                                  bridge.selectedAlbumDuration
-                                            font.pixelSize: 11
-                                            color: Theme.textMuted
-                                            elide: Text.ElideRight
-                                            Layout.fillWidth: true
+                                    // Main album info row
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        spacing: 14
+
+                                        Rectangle {
+                                            width: 96
+                                            height: 96
+                                            color: Theme.background
+                                            border.color: Theme.panelBorder
+                                            clip: true
+
+                                            Image {
+                                                anchors.fill: parent
+                                                source: "image://albumart/" + (bridge.selectedAlbumArtHash ? bridge.selectedAlbumArtHash : "default")
+                                                fillMode: Image.PreserveAspectCrop
+                                            }
                                         }
 
-                                        Item { height: 4; width: 1 }
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 3
 
-                                        RowLayout {
-                                            spacing: 8
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 8
 
-                                            Rectangle {
-                                                width: albPlayBtnText.implicitWidth + 20
-                                                height: 26
-                                                radius: 2
-                                                color: albPlayMouse.containsMouse ? Theme.accentHover : Theme.accent
-
-                                                RowLayout {
-                                                    anchors.centerIn: parent
-                                                    spacing: 6
-                                                    VectorIcon { name: "play"; width: 10; height: 10; color: Theme.textPrimary }
-                                                    Text { id: albPlayBtnText; text: "Play Album"; font.pixelSize: 11; font.bold: true; color: Theme.textPrimary }
+                                                Text {
+                                                    text: bridge.selectedAlbumTitle
+                                                    font.pixelSize: 16
+                                                    font.bold: true
+                                                    color: Theme.textPrimary
+                                                    elide: Text.ElideRight
+                                                    Layout.fillWidth: true
                                                 }
 
-                                                MouseArea {
-                                                    id: albPlayMouse
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    onClicked: bridge.playAlbum(bridge.selectedAlbumTitle, bridge.selectedAlbumArtist)
-                                                }
+
                                             }
 
-                                            Rectangle {
-                                                width: backToGridText.implicitWidth + 16
-                                                height: 26
-                                                radius: 2
-                                                color: backGridMouse.containsMouse ? Theme.selection : Theme.surfaceElevated
-                                                border.color: Theme.panelBorder
+                                            Text {
+                                                text: bridge.selectedAlbumArtist + (bridge.selectedAlbumYear ? " (" + bridge.selectedAlbumYear + ")" : "")
+                                                font.pixelSize: 12
+                                                color: Theme.accent
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
 
-                                                RowLayout {
-                                                    anchors.centerIn: parent
-                                                    spacing: 6
-                                                    VectorIcon { name: "grid"; width: 10; height: 10; color: Theme.textSecondary }
-                                                    Text { id: backToGridText; text: "All Albums"; font.pixelSize: 11; color: Theme.textSecondary }
+                                            Text {
+                                                text: (bridge.selectedAlbumGenre ? bridge.selectedAlbumGenre + " • " : "") +
+                                                      bridge.selectedAlbumTrackCount + " Tracks • " +
+                                                      bridge.selectedAlbumDuration
+                                                font.pixelSize: 10
+                                                color: Theme.textMuted
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
+
+                                            Item { height: 2; width: 1 }
+
+                                            // Action Buttons Row
+                                            RowLayout {
+                                                spacing: 8
+
+                                                Rectangle {
+                                                    width: albPlayBtnText.implicitWidth + 20
+                                                    height: 24
+                                                    radius: 2
+                                                    color: albPlayMouse.containsMouse ? Theme.accentHover : Theme.accent
+
+                                                    RowLayout {
+                                                        anchors.centerIn: parent
+                                                        spacing: 6
+                                                        VectorIcon { name: "play"; width: 10; height: 10; color: Theme.textPrimary }
+                                                        Text { id: albPlayBtnText; text: "Play Album"; font.pixelSize: 10; font.bold: true; color: Theme.textPrimary }
+                                                    }
+
+                                                    MouseArea {
+                                                        id: albPlayMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: bridge.playAlbum(bridge.selectedAlbumTitle, bridge.selectedAlbumArtist)
+                                                    }
                                                 }
 
-                                                MouseArea {
-                                                    id: backGridMouse
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    onClicked: mainViewMode = 0
+                                                Rectangle {
+                                                    width: albQueueBtnText.implicitWidth + 18
+                                                    height: 24
+                                                    radius: 2
+                                                    color: albQueueMouse.containsMouse ? Theme.selection : Theme.surfaceElevated
+                                                    border.color: Theme.panelBorder
+
+                                                    RowLayout {
+                                                        anchors.centerIn: parent
+                                                        spacing: 5
+                                                        VectorIcon { name: "queue"; width: 10; height: 10; color: Theme.textSecondary }
+                                                        Text { id: albQueueBtnText; text: "Queue Album"; font.pixelSize: 10; color: Theme.textSecondary }
+                                                    }
+
+                                                    MouseArea {
+                                                        id: albQueueMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: bridge.queueAlbumLast(bridge.selectedAlbumTitle, bridge.selectedAlbumArtist)
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    width: viewInTableText.implicitWidth + 18
+                                                    height: 24
+                                                    radius: 2
+                                                    color: viewInTableMouse.containsMouse ? Theme.selection : Theme.surfaceElevated
+                                                    border.color: Theme.panelBorder
+
+                                                    RowLayout {
+                                                        anchors.centerIn: parent
+                                                        spacing: 5
+                                                        VectorIcon { name: "table"; width: 10; height: 10; color: Theme.textSecondary }
+                                                        Text { id: viewInTableText; text: "View in Track List"; font.pixelSize: 10; color: Theme.textSecondary }
+                                                    }
+
+                                                    MouseArea {
+                                                        id: viewInTableMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: {
+                                                            bridge.search(bridge.selectedAlbumTitle);
+                                                            previousViewMode = 2;
+                                                            switchViewMode(1);
+                                                        }
+                                                    }
+                                                    ToolTip.visible: viewInTableMouse.containsMouse
+                                                    ToolTip.text: "Filter and view these tracks in the main list table"
+                                                }
+
+                                                Rectangle {
+                                                    width: backToGridText.implicitWidth + 16
+                                                    height: 24
+                                                    radius: 2
+                                                    color: backGridMouse.containsMouse ? Theme.selection : Theme.surfaceElevated
+                                                    border.color: Theme.panelBorder
+
+                                                    RowLayout {
+                                                        anchors.centerIn: parent
+                                                        spacing: 5
+                                                        VectorIcon { name: "grid"; width: 10; height: 10; color: Theme.textSecondary }
+                                                        Text { id: backToGridText; text: "All Albums"; font.pixelSize: 10; color: Theme.textSecondary }
+                                                    }
+
+                                                    MouseArea {
+                                                        id: backGridMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: switchViewMode(0)
+                                                    }
                                                 }
                                             }
                                         }
@@ -3092,8 +3247,7 @@ ApplicationWindow {
                                     Text { text: "File Size:"; font.pixelSize: 10; font.bold: true; color: Theme.textMuted }
                                     Text { text: bridge.currentFileSizeStr.length > 0 ? bridge.currentFileSizeStr : "—"; font.pixelSize: 10; color: Theme.textPrimary; elide: Text.ElideRight; Layout.fillWidth: true }
 
-                                    Text { text: "Engine Mode:"; font.pixelSize: 10; font.bold: true; color: Theme.textMuted }
-                                    Text { text: "Direct PCM (Lossless)"; font.pixelSize: 10; font.bold: true; color: Theme.success; elide: Text.ElideRight; Layout.fillWidth: true }
+
                                 }
                             }
 
@@ -3148,138 +3302,29 @@ ApplicationWindow {
             Layout.preferredHeight: 74
             color: Theme.surface
 
-            RowLayout {
+            Item {
                 anchors.fill: parent
                 anchors.leftMargin: 16
                 anchors.rightMargin: 16
-                spacing: 16
 
-                // Track preview
-                RowLayout {
-                    Layout.preferredWidth: 310
-                    spacing: 12
-
-                    Rectangle {
-                        width: 48
-                        height: 48
-                        color: Theme.background
-                        border.color: Theme.panelBorder
-                        border.width: 1
-                        clip: true
-
-                        Image {
-                            anchors.fill: parent
-                            source: bridge.currentArtUrl
-                            fillMode: Image.PreserveAspectCrop
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
-
-                        Text {
-                            text: bridge.currentTrackTitle
-                            font.pixelSize: 12
-                            font.bold: true
-                            color: Theme.textPrimary
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-
-                        Text {
-                            text: bridge.currentArtist + (bridge.currentAlbum.length > 0 ? " • " + bridge.currentAlbum : "")
-                            font.pixelSize: 10
-                            color: Theme.textSecondary
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-
-                        Badge {
-                            text: bridge.currentAudioSpecs
-                            visible: text.length > 0
-                            fontSize: 8
-                            bold: true
-                            badgeColor: Theme.surfaceElevated
-                            borderColor: Theme.panelBorder
-                            textColor: Theme.accentHover
-                            maxWidth: 240
-                            Layout.alignment: Qt.AlignLeft
-                        }
-                    }
-                }
-
-                // Center: Transport Controls & Scrubber Timeline
+                // Center: Transport Controls & Scrubber Timeline (Strictly centered on parent window)
                 ColumnLayout {
-                    Layout.fillWidth: true
+                    id: centerTransportControls
+                    z: 2
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(560, Math.max(340, parent.width * 0.42))
                     spacing: 2
 
-                    // Control Buttons Row
-                    RowLayout {
-                        Layout.alignment: Qt.AlignHCenter
-                        spacing: 16
+                    // Control Buttons Container (Play/Pause strictly centered at 50% width)
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 36
 
-                        // Shuffle Button (Cycle: Off -> Tracks -> Albums)
+                        // Play / Pause Primary Action Button (Strictly centered on column and window)
                         Rectangle {
-                            width: 24
-                            height: 24
-                            radius: 2
-                            color: bridge.shuffleMode !== 0 ? Theme.selection : (shufMouse.containsMouse ? Theme.surfaceElevated : "transparent")
-                            border.color: bridge.shuffleMode !== 0 ? Theme.accent : "transparent"
-                            border.width: 1
-
-                            VectorIcon {
-                                anchors.centerIn: parent
-                                name: "shuffle"
-                                width: 13
-                                height: 13
-                                color: bridge.shuffleMode === 1 ? Theme.accent : (bridge.shuffleMode === 2 ? Theme.accentHover : Theme.textMuted)
-                            }
-                            MouseArea {
-                                id: shufMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: bridge.cycleShuffleMode()
-                            }
-                            ToolTip.visible: shufMouse.containsMouse
-                            ToolTip.text: bridge.shuffleMode === 0 ? "Shuffle: Off" : (bridge.shuffleMode === 1 ? "Shuffle: Tracks" : "Shuffle: Albums")
-                        }
-
-                        // Previous Button
-                        Rectangle {
-                            width: 28
-                            height: 28
-                            radius: 2
-                            color: prevMouse.containsMouse ? Theme.surfaceElevated : "transparent"
-                            VectorIcon { anchors.centerIn: parent; name: "previous"; width: 14; height: 14; color: Theme.textPrimary }
-                            MouseArea {
-                                id: prevMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: bridge.previousTrack()
-                            }
-                        }
-
-                        // Stop Button
-                        Rectangle {
-                            width: 28
-                            height: 28
-                            radius: 2
-                            color: stopMouse.containsMouse ? Theme.surfaceElevated : "transparent"
-                            VectorIcon { anchors.centerIn: parent; name: "stop"; width: 12; height: 12; color: Theme.textSecondary }
-                            MouseArea {
-                                id: stopMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: bridge.stop()
-                            }
-                        }
-
-                        // Play / Pause Primary Action Button (Clean crisp high-contrast button)
-                        Rectangle {
+                            id: playPauseBtn
+                            anchors.centerIn: parent
                             width: 36
                             height: 36
                             radius: 18
@@ -3303,47 +3348,128 @@ ApplicationWindow {
                             }
                         }
 
-                        // Next Button
-                        Rectangle {
-                            width: 28
-                            height: 28
-                            radius: 2
-                            color: nextMouse.containsMouse ? Theme.surfaceElevated : "transparent"
-                            VectorIcon { anchors.centerIn: parent; name: "next"; width: 14; height: 14; color: Theme.textPrimary }
-                            MouseArea {
-                                id: nextMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: bridge.nextTrack()
+                        // Left buttons: Shuffle, Stop, Previous (Adjacent to Play)
+                        RowLayout {
+                            anchors.right: playPauseBtn.left
+                            anchors.rightMargin: 16
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 12
+
+                            // Shuffle Button (Cycle: Off -> Tracks -> Albums)
+                            Rectangle {
+                                width: 24
+                                height: 24
+                                radius: 2
+                                color: bridge.shuffleMode !== 0 ? Theme.selection : (shufMouse.containsMouse ? Theme.surfaceElevated : "transparent")
+                                border.color: bridge.shuffleMode !== 0 ? Theme.accent : "transparent"
+                                border.width: 1
+
+                                VectorIcon {
+                                    anchors.centerIn: parent
+                                    name: "shuffle"
+                                    width: 13
+                                    height: 13
+                                    color: bridge.shuffleMode === 1 ? Theme.accent : (bridge.shuffleMode === 2 ? Theme.accentHover : Theme.textMuted)
+                                }
+                                MouseArea {
+                                    id: shufMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: bridge.cycleShuffleMode()
+                                }
+                                ToolTip.visible: shufMouse.containsMouse
+                                ToolTip.text: bridge.shuffleMode === 0 ? "Shuffle: Off" : (bridge.shuffleMode === 1 ? "Shuffle: Tracks" : "Shuffle: Albums")
+                            }
+
+                            // Stop Button
+                            Rectangle {
+                                width: 28
+                                height: 28
+                                radius: 2
+                                color: stopMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+                                VectorIcon { anchors.centerIn: parent; name: "stop"; width: 12; height: 12; color: Theme.textSecondary }
+                                MouseArea {
+                                    id: stopMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: bridge.stop()
+                                }
+                                ToolTip.visible: stopMouse.containsMouse
+                                ToolTip.text: "Stop (X)"
+                            }
+
+                            // Previous Button
+                            Rectangle {
+                                width: 28
+                                height: 28
+                                radius: 2
+                                color: prevMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+                                VectorIcon { anchors.centerIn: parent; name: "previous"; width: 14; height: 14; color: Theme.textPrimary }
+                                MouseArea {
+                                    id: prevMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: bridge.previousTrack()
+                                }
+                                ToolTip.visible: prevMouse.containsMouse
+                                ToolTip.text: "Previous (Z)"
                             }
                         }
 
-                        // Repeat Button (Cycle: Off -> All -> One)
-                        Rectangle {
-                            width: 24
-                            height: 24
-                            radius: 2
-                            color: bridge.repeatMode !== 0 ? Theme.selection : (repMouse.containsMouse ? Theme.surfaceElevated : "transparent")
-                            border.color: bridge.repeatMode !== 0 ? Theme.accent : "transparent"
-                            border.width: 1
+                        // Right buttons: Next (Adjacent to Play), Repeat
+                        RowLayout {
+                            anchors.left: playPauseBtn.right
+                            anchors.leftMargin: 16
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 12
 
-                            VectorIcon {
-                                anchors.centerIn: parent
-                                name: bridge.repeatMode === 2 ? "repeat_one" : "repeat"
-                                width: 13
-                                height: 13
-                                color: bridge.repeatMode !== 0 ? Theme.accent : Theme.textMuted
+                            // Next Button
+                            Rectangle {
+                                width: 28
+                                height: 28
+                                radius: 2
+                                color: nextMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+                                VectorIcon { anchors.centerIn: parent; name: "next"; width: 14; height: 14; color: Theme.textPrimary }
+                                MouseArea {
+                                    id: nextMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: bridge.nextTrack()
+                                }
+                                ToolTip.visible: nextMouse.containsMouse
+                                ToolTip.text: "Next (B)"
                             }
-                            MouseArea {
-                                id: repMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: bridge.cycleRepeatMode()
+
+                            // Repeat Button (Cycle: Off -> All -> One)
+                            Rectangle {
+                                width: 24
+                                height: 24
+                                radius: 2
+                                color: bridge.repeatMode !== 0 ? Theme.selection : (repMouse.containsMouse ? Theme.surfaceElevated : "transparent")
+                                border.color: bridge.repeatMode !== 0 ? Theme.accent : "transparent"
+                                border.width: 1
+
+                                VectorIcon {
+                                    anchors.centerIn: parent
+                                    name: bridge.repeatMode === 2 ? "repeat_one" : "repeat"
+                                    width: 13
+                                    height: 13
+                                    color: bridge.repeatMode !== 0 ? Theme.accent : Theme.textMuted
+                                }
+                                MouseArea {
+                                    id: repMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: bridge.cycleRepeatMode()
+                                }
+                                ToolTip.visible: repMouse.containsMouse
+                                ToolTip.text: bridge.repeatMode === 0 ? "Repeat: Off" : (bridge.repeatMode === 1 ? "Repeat: All" : "Repeat: One")
                             }
-                            ToolTip.visible: repMouse.containsMouse
-                            ToolTip.text: bridge.repeatMode === 0 ? "Repeat: Off" : (bridge.repeatMode === 1 ? "Repeat: All" : "Repeat: One")
                         }
                     }
 
@@ -3408,10 +3534,76 @@ ApplicationWindow {
                     }
                 }
 
+                // Left: Track preview
+                RowLayout {
+                    id: leftTrackPreview
+                    anchors.left: parent.left
+                    anchors.right: centerTransportControls.left
+                    anchors.rightMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 12
+                    clip: true
+
+                    Rectangle {
+                        width: 48
+                        height: 48
+                        Layout.preferredWidth: 48
+                        Layout.preferredHeight: 48
+                        color: Theme.background
+                        border.color: Theme.panelBorder
+                        border.width: 1
+                        clip: true
+
+                        Image {
+                            anchors.fill: parent
+                            source: bridge.currentArtUrl
+                            fillMode: Image.PreserveAspectCrop
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        Text {
+                            text: bridge.currentTrackTitle
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: Theme.textPrimary
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+
+                        Text {
+                            text: bridge.currentArtist + (bridge.currentAlbum.length > 0 ? " • " + bridge.currentAlbum : "")
+                            font.pixelSize: 10
+                            color: Theme.textSecondary
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+
+                        Text {
+                            text: bridge.currentAudioSpecs
+                            visible: text.length > 0
+                            font.pixelSize: 9
+                            color: Theme.textMuted
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                    }
+                }
+
                 // Right: Volume & Tool Toggles
                 RowLayout {
-                    Layout.preferredWidth: 260
+                    id: rightControls
+                    anchors.right: parent.right
+                    anchors.left: centerTransportControls.right
+                    anchors.leftMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
                     spacing: 10
+                    clip: true
+
+                    Item { Layout.fillWidth: true }
 
                     VectorIcon {
                         name: bridge.isMuted ? "volume_mute" : "volume"
@@ -3526,6 +3718,7 @@ ApplicationWindow {
                 // Indexing / scanning status
                 RowLayout {
                     spacing: 6
+                    visible: bridge.isScanning || bridge.scanStatusText.length > 0
 
                     Rectangle {
                         width: 5
@@ -3541,10 +3734,15 @@ ApplicationWindow {
                     }
                 }
 
-                Rectangle { width: 1; height: 12; color: Theme.panelBorder }
+                Rectangle {
+                    width: 1
+                    height: 12
+                    color: Theme.panelBorder
+                    visible: bridge.isScanning || bridge.scanStatusText.length > 0
+                }
 
                 Text {
-                    text: "Parakeet v0.1.0 • Direct PCM Output"
+                    text: "Parakeet v0.1.0"
                     font.pixelSize: 9
                     color: Theme.textMuted
                 }
@@ -3616,14 +3814,12 @@ ApplicationWindow {
                         }
                     }
 
-                    // Format Badge
-                    Badge {
+                    Text {
                         text: bridge.currentCodec
                         visible: text.length > 0
-                        fontSize: 8
-                        badgeColor: Theme.surfaceElevated
-                        borderColor: Theme.panelBorder
-                        textColor: Theme.accent
+                        font.pixelSize: 10
+                        font.weight: Font.Medium
+                        color: Theme.textMuted
                     }
 
                     // Restore Normal Window Button
@@ -3661,7 +3857,7 @@ ApplicationWindow {
                     spacing: 6
 
                     Text {
-                        text: bridge.positionFormatted
+                        text: bridge.positionStr
                         font.pixelSize: 9
                         color: Theme.textMuted
                     }
@@ -3676,7 +3872,7 @@ ApplicationWindow {
                     }
 
                     Text {
-                        text: bridge.durationFormatted
+                        text: bridge.durationStr
                         font.pixelSize: 9
                         color: Theme.textMuted
                     }

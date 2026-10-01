@@ -1119,7 +1119,7 @@ QVariantMap QtBridge::audioPipelineDiagnostics() const {
   map["ditherMode"] = m_ditherMode;
   map["channelProcessing"] = m_channelProcessing;
   map["xruns"] = 0;
-  map["state"] = m_isPlaying ? "PLAYING" : "IDLE";
+  map["state"] = m_isPlaying ? "Playing" : "Stopped";
   map["loopActive"] = isLoopActive();
   map["loopPointA"] = m_loopPointA;
   map["loopPointB"] = m_loopPointB;

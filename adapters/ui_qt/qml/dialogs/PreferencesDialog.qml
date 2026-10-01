@@ -1151,7 +1151,7 @@ Dialog {
 
                     StyledCheckBox {
                         Layout.fillWidth: true
-                        text: "Display bottom status bar (track count, engine specs, scanning state)"
+                        text: "Display bottom status bar (track count, audio specs, scanning state)"
                         checked: bridge.showStatusBar
                         onToggled: bridge.setShowStatusBar(checked)
                     }
@@ -1319,7 +1319,7 @@ Dialog {
                                 RowLayout {
                                     spacing: 8
                                     Text {
-                                        text: "Active Audio Engine:"
+                                        text: "Audio Backend:"
                                         font.pixelSize: Theme.fontSizeSmall
                                         font.bold: true
                                         color: Theme.textPrimary
@@ -1330,15 +1330,15 @@ Dialog {
                                         font.bold: true
                                         color: Theme.accentHover
                                     }
-                                    Badge {
-                                        text: bridge.bitPerfectExclusive ? "BIT-PERFECT" : "SHARED MIXER"
-                                        textColor: bridge.bitPerfectExclusive ? Theme.accentHover : Theme.warning
-                                        badgeBorderColor: bridge.bitPerfectExclusive ? Theme.accent : Theme.warning
+                                    Text {
+                                        text: "(" + (bridge.bitPerfectExclusive ? "Exclusive" : "Shared") + ")"
+                                        font.pixelSize: Theme.fontSizeSmall - 1
+                                        color: bridge.bitPerfectExclusive ? Theme.accentHover : Theme.textMuted
                                     }
                                 }
 
                                 Text {
-                                    text: bridge.currentAudioSpecs + " • Device: " + bridge.currentAudioDevice
+                                    text: (bridge.currentAudioSpecs.length > 0 ? bridge.currentAudioSpecs + " • " : "") + "Device: " + bridge.currentAudioDevice
                                     font.pixelSize: Theme.fontSizeSmall - 1
                                     color: Theme.textMuted
                                     elide: Text.ElideRight
@@ -1497,7 +1497,7 @@ Dialog {
                             Layout.fillWidth: true
                             spacing: 2
                             Text {
-                                text: "Resampler Engine & Quality"
+                                text: "Resampling Quality"
                                 font.pixelSize: Theme.fontSizeSmall
                                 font.bold: true
                                 color: Theme.textPrimary
@@ -1603,7 +1603,7 @@ Dialog {
                     spacing: 16
 
                     Text {
-                        text: "Playback Transitions & DSP Engine"
+                        text: "Playback Transitions & DSP"
                         font.pixelSize: Theme.fontSizeLarge
                         font.bold: true
                         color: Theme.textPrimary

@@ -203,14 +203,11 @@ Item {
                                     Layout.fillWidth: true
                                 }
 
-                                Badge {
+                                Text {
                                     text: model.codec
-                                    fontSize: 8
-                                    horizontalPadding: 4
-                                    verticalPadding: 1
-                                    badgeColor: model.codec === "FLAC" ? Theme.selection : Theme.surface
-                                    badgeBorderColor: Theme.panelBorder
-                                    textColor: model.codec === "FLAC" ? Theme.accentHover : Theme.textMuted
+                                    font.pixelSize: Theme.fontSizeSmall - 2
+                                    font.weight: Font.Medium
+                                    color: Theme.textMuted
                                 }
                             }
                         }
