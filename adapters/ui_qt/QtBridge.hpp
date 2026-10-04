@@ -90,6 +90,9 @@ class QtBridge : public QObject {
   Q_PROPERTY(int upNextCount READ upNextCount NOTIFY queueChanged)
   Q_PROPERTY(QStringList availablePlaylists READ availablePlaylists NOTIFY
                  playlistsChanged)
+  Q_PROPERTY(
+      QVariantMap tableColumns READ tableColumns NOTIFY tableColumnsChanged)
+  Q_PROPERTY(QStringList tableColumnKeys READ tableColumnKeys CONSTANT)
 
   // Library Statistics
   Q_PROPERTY(int totalAlbums READ totalAlbums NOTIFY libraryStatsChanged)
@@ -661,6 +664,18 @@ public:
   Q_INVOKABLE QString getLogFilePath() const;
   [[nodiscard]] QVariantMap audioPipelineDiagnostics() const;
 
+  // Table Columns Management (Issue #11)
+  [[nodiscard]] QVariantMap tableColumns() const;
+  [[nodiscard]] QStringList tableColumnKeys() const;
+  [[nodiscard]] Q_INVOKABLE bool isColumnVisible(const QString &colKey) const;
+  [[nodiscard]] Q_INVOKABLE int getColumnWidth(const QString &colKey) const;
+  Q_INVOKABLE void setColumnVisible(const QString &colKey, bool visible);
+  Q_INVOKABLE void toggleColumnVisible(const QString &colKey);
+  Q_INVOKABLE void setColumnWidth(const QString &colKey, int width);
+  Q_INVOKABLE void autoSizeColumn(const QString &colKey);
+  Q_INVOKABLE void autoSizeAllColumns();
+  Q_INVOKABLE void resetTableColumns();
+
   // General Settings
   Q_INVOKABLE void setLanguage(const QString &lang);
   Q_INVOKABLE void setStartupAction(const QString &action);
@@ -855,6 +870,7 @@ signals:
   void sleepTimerChanged();
   void playlistsChanged();
   void ratingsChanged();
+  void tableColumnsChanged();
 
 private:
   void setupPositionTimer();
@@ -1015,6 +1031,22 @@ private:
 
   // Diagnostics Settings
   QString m_loggingVerbosity{"Info"};
+
+  struct ColumnMeta {
+    QString key;
+    QString title;
+    QString header;
+    bool visible;
+    int width;
+    int defaultWidth;
+    bool defaultVisible;
+  };
+
+  void initTableColumns();
+  void loadColumnSettings();
+  void saveColumnSettings();
+
+  std::vector<ColumnMeta> m_columns;
 
   QMediaDevices *m_mediaDevices{nullptr};
   QTimer *m_positionTimer{nullptr};

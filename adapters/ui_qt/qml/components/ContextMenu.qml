@@ -13,6 +13,8 @@ Menu {
     property string targetArtist: ""
     property bool isPlaylistView: false
     property string currentPlaylistName: ""
+    property string targetColumnKey: ""
+    property string targetColumnTitle: ""
 
     readonly property int selectedCount: targetTracks && targetTracks.length > 0 ? targetTracks.length : (targetTrack ? 1 : 0)
     readonly property bool isMultiSelect: selectedCount > 1
@@ -45,6 +47,8 @@ Menu {
     signal deleteFilesFromDiskRequested(var tracks)
     signal newPlaylistRequested()
     signal playlistTracksChanged()
+    signal openAudioFilesRequested()
+    signal openAudioFolderRequested()
 
     background: Rectangle {
         implicitWidth: 230
@@ -100,9 +104,18 @@ Menu {
 
         contentItem: RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 16
+            anchors.leftMargin: 12
             anchors.rightMargin: 12
-            spacing: 8
+            spacing: 6
+
+            Text {
+                visible: cItem.checkable
+                text: cItem.checked ? "✓" : ""
+                font.pixelSize: 11
+                font.bold: true
+                color: Theme.accent
+                Layout.preferredWidth: cItem.checkable ? 14 : 0
+            }
 
             Text {
                 text: cItem.text
@@ -154,9 +167,18 @@ Menu {
 
             contentItem: RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 16
+                anchors.leftMargin: 12
                 anchors.rightMargin: 12
-                spacing: 8
+                spacing: 6
+
+                Text {
+                    visible: sItem.checkable
+                    text: sItem.checked ? "✓" : ""
+                    font.pixelSize: 11
+                    font.bold: true
+                    color: Theme.accent
+                    Layout.preferredWidth: sItem.checkable ? 14 : 0
+                }
 
                 Text {
                     text: sItem.text
@@ -470,6 +492,152 @@ Menu {
         text: root.isMultiSelect ? ("Delete " + root.selectedCount + " Files from Disk...") : "Delete File from Disk..."
         visible: root.menuType === "track"
         onTriggered: root.deleteFilesFromDiskRequested(root.getEffectiveTracks())
+    }
+
+    // --- Column Header Context Menu (Issue #11) ---
+
+    ContextMenuItem {
+        text: "Sort Ascending" + (bridge.trackModel.sortColumn === root.targetColumnKey && bridge.trackModel.sortAscending ? "  ✓" : "")
+        visible: root.menuType === "header" && root.targetColumnKey.length > 0
+        onTriggered: {
+            bridge.trackModel.sortBy(root.targetColumnKey, true);
+        }
+    }
+
+    ContextMenuItem {
+        text: "Sort Descending" + (bridge.trackModel.sortColumn === root.targetColumnKey && !bridge.trackModel.sortAscending ? "  ✓" : "")
+        visible: root.menuType === "header" && root.targetColumnKey.length > 0
+        onTriggered: {
+            bridge.trackModel.sortBy(root.targetColumnKey, false);
+        }
+    }
+
+    ContextMenuSeparator {
+        visible: root.menuType === "header" && root.targetColumnKey.length > 0
+    }
+
+    ContextMenuItem {
+        text: root.targetColumnTitle ? ("Auto-Size Column (" + root.targetColumnTitle + ")") : "Auto-Size Selected Column"
+        visible: root.menuType === "header" && root.targetColumnKey.length > 0
+        onTriggered: {
+            bridge.autoSizeColumn(root.targetColumnKey);
+        }
+    }
+
+    ContextMenuItem {
+        text: "Auto-Size All Columns"
+        visible: root.menuType === "header"
+        onTriggered: {
+            bridge.autoSizeAllColumns();
+        }
+    }
+
+    ContextMenuItem {
+        text: "Reset to Default Columns & Widths"
+        visible: root.menuType === "header"
+        onTriggered: {
+            bridge.resetTableColumns();
+        }
+    }
+
+    ContextMenuSeparator {
+        visible: root.menuType === "header"
+    }
+
+    ContextSubMenu {
+        id: columnsVisibilitySubMenu
+        title: "Columns"
+        visible: root.menuType === "header"
+
+        Instantiator {
+            model: bridge.tableColumnKeys
+            onObjectAdded: (index, object) => columnsVisibilitySubMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => columnsVisibilitySubMenu.removeItem(object)
+            delegate: ContextMenuItem {
+                property var colData: bridge.tableColumns[modelData]
+                checkable: true
+                checked: colData && colData.visible ? true : false
+                text: (colData && colData.title) ? colData.title : modelData
+                onTriggered: {
+                    bridge.toggleColumnVisible(modelData);
+                }
+            }
+        }
+    }
+
+    // --- Empty Viewport Area Context Menu (Issue #11) ---
+
+    ContextMenuItem {
+        text: "Select All (Ctrl+A)"
+        visible: root.menuType === "viewport"
+        onTriggered: bridge.trackModel.selectAll()
+    }
+
+    ContextMenuSeparator {
+        visible: root.menuType === "viewport"
+    }
+
+    ContextMenuItem {
+        text: "Add Audio Files... (Ctrl+O)"
+        visible: root.menuType === "viewport"
+        onTriggered: root.openAudioFilesRequested()
+    }
+
+    ContextMenuItem {
+        text: "Add Audio Folder... (Ctrl+Shift+O)"
+        visible: root.menuType === "viewport"
+        onTriggered: root.openAudioFolderRequested()
+    }
+
+    ContextMenuSeparator {
+        visible: root.menuType === "viewport"
+    }
+
+    ContextSubMenu {
+        title: "Sort By"
+        visible: root.menuType === "viewport"
+
+        ContextMenuItem {
+            text: "Title" + (bridge.trackModel.sortColumn === "title" ? (bridge.trackModel.sortAscending ? "  ▲" : "  ▼") : "")
+            onTriggered: bridge.trackModel.toggleSort("title")
+        }
+        ContextMenuItem {
+            text: "Artist" + (bridge.trackModel.sortColumn === "artist" ? (bridge.trackModel.sortAscending ? "  ▲" : "  ▼") : "")
+            onTriggered: bridge.trackModel.toggleSort("artist")
+        }
+        ContextMenuItem {
+            text: "Album" + (bridge.trackModel.sortColumn === "album" ? (bridge.trackModel.sortAscending ? "  ▲" : "  ▼") : "")
+            onTriggered: bridge.trackModel.toggleSort("album")
+        }
+        ContextMenuItem {
+            text: "Year" + (bridge.trackModel.sortColumn === "year" ? (bridge.trackModel.sortAscending ? "  ▲" : "  ▼") : "")
+            onTriggered: bridge.trackModel.toggleSort("year")
+        }
+        ContextMenuItem {
+            text: "Track Number" + (bridge.trackModel.sortColumn === "trackNumber" ? (bridge.trackModel.sortAscending ? "  ▲" : "  ▼") : "")
+            onTriggered: bridge.trackModel.toggleSort("trackNumber")
+        }
+        ContextMenuItem {
+            text: "Rating" + (bridge.trackModel.sortColumn === "rating" ? (bridge.trackModel.sortAscending ? "  ▲" : "  ▼") : "")
+            onTriggered: bridge.trackModel.toggleSort("rating")
+        }
+        ContextMenuItem {
+            text: "Date Added" + (bridge.trackModel.sortColumn === "dateAdded" ? (bridge.trackModel.sortAscending ? "  ▲" : "  ▼") : "")
+            onTriggered: bridge.trackModel.toggleSort("dateAdded")
+        }
+    }
+
+    ContextMenuSeparator {
+        visible: root.menuType === "viewport"
+    }
+
+    ContextMenuItem {
+        text: "Refresh View (F5)"
+        visible: root.menuType === "viewport"
+        onTriggered: {
+            bridge.trackModel.loadAllTracks();
+            bridge.rescanAllMonitoredFolders();
+        }
     }
 
     // Explorer actions

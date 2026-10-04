@@ -787,4 +787,106 @@ TEST_F(SettingsTest, PlaybackAndLibraryMenuActions) {
   EXPECT_TRUE(bridge.deleteFilesFromDisk(QStringList{"del_1"}));
   EXPECT_FALSE(QFile::exists("/tmp/parakeet_test_delete.mp3"));
   EXPECT_FALSE(db.getTrackById("del_1").has_value());
+
+  // Issue #11: Column Headers, Widths, Visibility, Sorting & Viewport Actions
+  QStringList expectedKeys = {
+      "trackNumber", "title", "artist", "album", "albumArtist", "genre", "year",
+      "codec", "bitrate", "sampleRate", "bitDepth", "playCount", "rating",
+      "dateAdded", "filePath", "fileSize", "duration"
+  };
+  QStringList actualKeys = bridge.tableColumnKeys();
+  EXPECT_EQ(actualKeys.size(), 17);
+  for (const auto &k : expectedKeys) {
+    EXPECT_TRUE(actualKeys.contains(k));
+  }
+
+  // Column visibility toggling
+  EXPECT_TRUE(bridge.isColumnVisible("title"));
+  bridge.setColumnVisible("title", false);
+  EXPECT_FALSE(bridge.isColumnVisible("title"));
+  bridge.toggleColumnVisible("title");
+  EXPECT_TRUE(bridge.isColumnVisible("title"));
+
+  EXPECT_FALSE(bridge.isColumnVisible("sampleRate"));
+  bridge.toggleColumnVisible("sampleRate");
+  EXPECT_TRUE(bridge.isColumnVisible("sampleRate"));
+
+  // Column width adjustment
+  int origWidth = bridge.getColumnWidth("artist");
+  bridge.setColumnWidth("artist", 185);
+  EXPECT_EQ(bridge.getColumnWidth("artist"), 185);
+
+  // Auto-size selected column & all columns
+  bridge.autoSizeColumn("title");
+  EXPECT_GE(bridge.getColumnWidth("title"), 120);
+  bridge.autoSizeAllColumns();
+  EXPECT_GE(bridge.getColumnWidth("artist"), 80);
+
+  // Reset to default columns & widths
+  bridge.resetTableColumns();
+  EXPECT_TRUE(bridge.isColumnVisible("title"));
+  EXPECT_FALSE(bridge.isColumnVisible("sampleRate"));
+  EXPECT_EQ(bridge.getColumnWidth("artist"), 130);
+
+  // Sorting ascending / descending in TrackListModel
+  core::Track sortA;
+  sortA.id = "sort_a";
+  sortA.title = "Alpha";
+  sortA.artist = "Zeta Artist";
+  sortA.album = "B Album";
+  sortA.year = 2010;
+  sortA.durationMs = 60000;
+  sortA.trackNumber = 3;
+
+  core::Track sortB;
+  sortB.id = "sort_b";
+  sortB.title = "Beta";
+  sortB.artist = "Alpha Artist";
+  sortB.album = "A Album";
+  sortB.year = 2020;
+  sortB.durationMs = 180000;
+  sortB.trackNumber = 1;
+
+  db.saveTrack(sortA);
+  db.saveTrack(sortB);
+  bridge.trackModel()->loadAllTracks();
+
+  // Sort by title ascending
+  bridge.trackModel()->sortBy("title", true);
+  EXPECT_EQ(bridge.trackModel()->sortColumn(), "title");
+  EXPECT_TRUE(bridge.trackModel()->sortAscending());
+  EXPECT_EQ(bridge.trackModel()->getTrackAt(0)["title"].toString(), "Alpha");
+
+  // Sort by title descending
+  bridge.trackModel()->sortBy("title", false);
+  EXPECT_FALSE(bridge.trackModel()->sortAscending());
+  auto lastTrackTitle = bridge.trackModel()->getTrackAt(0)["title"].toString();
+  EXPECT_NE(lastTrackTitle, "Alpha");
+
+  // Toggle sort
+  bridge.trackModel()->toggleSort("title");
+  EXPECT_TRUE(bridge.trackModel()->sortAscending());
+  EXPECT_EQ(bridge.trackModel()->getTrackAt(0)["title"].toString(), "Alpha");
+
+  // Sort by year
+  bridge.trackModel()->sortBy("year", true);
+  EXPECT_EQ(bridge.trackModel()->sortColumn(), "year");
+
+  // Sort by track number
+  bridge.trackModel()->sortBy("trackNumber", true);
+  EXPECT_EQ(bridge.trackModel()->sortColumn(), "trackNumber");
+
+  // Clear sort
+  bridge.trackModel()->clearSort();
+  EXPECT_TRUE(bridge.trackModel()->sortColumn().isEmpty());
+
+  // Check roles and formatting for new columns
+  QVariantMap trackData = bridge.trackModel()->getTrackAt(0);
+  EXPECT_TRUE(trackData.contains("fileSizeBytes"));
+  EXPECT_TRUE(trackData.contains("fileSizeFormatted"));
+  EXPECT_TRUE(trackData.contains("dateAdded"));
+  EXPECT_TRUE(trackData.contains("dateAddedFormatted"));
+  EXPECT_TRUE(trackData.contains("playCount"));
+  EXPECT_TRUE(trackData.contains("rating"));
 }
+

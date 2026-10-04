@@ -57,6 +57,8 @@ QtBridge::QtBridge(core::PlayerService &player, core::LibraryService &library,
             });
   }
 
+  initTableColumns();
+  loadColumnSettings();
   loadSettings();
   refreshLibraryStats();
   refreshHistory();
@@ -2810,4 +2812,208 @@ void QtBridge::resetAllSettingsToDefaults() {
   emit hotkeysChanged();
   emit metadataSettingsChanged();
   emit diagnosticsSettingsChanged();
+}
+
+void QtBridge::initTableColumns() {
+  m_columns = {
+      {"trackNumber", "Track #", "#", true, 36, 36, true},
+      {"title", "Title", "TITLE", true, 200, 200, true},
+      {"artist", "Artist", "ARTIST", true, 130, 130, true},
+      {"album", "Album", "ALBUM", true, 130, 130, true},
+      {"albumArtist", "Album Artist", "ALBUM ARTIST", false, 120, 120, false},
+      {"genre", "Genre", "GENRE", true, 90, 90, true},
+      {"year", "Year", "YEAR", true, 46, 46, true},
+      {"codec", "Format / Codec", "FORMAT", true, 72, 72, true},
+      {"bitrate", "Bitrate", "BITRATE", true, 64, 64, true},
+      {"sampleRate", "Sample Rate", "SAMPLE RATE", false, 80, 80, false},
+      {"bitDepth", "Bit Depth", "BIT DEPTH", false, 60, 60, false},
+      {"playCount", "Play Count", "PLAYS", false, 52, 52, false},
+      {"rating", "Rating", "RATING", false, 72, 72, false},
+      {"dateAdded", "Date Added", "DATE ADDED", false, 90, 90, false},
+      {"filePath", "File Path", "FILE PATH", false, 180, 180, false},
+      {"fileSize", "File Size", "SIZE", false, 64, 64, false},
+      {"duration", "Duration", "TIME", true, 50, 50, true}
+  };
+}
+
+QVariantMap QtBridge::tableColumns() const {
+  QVariantMap map;
+  for (const auto &col : m_columns) {
+    QVariantMap item;
+    item["key"] = col.key;
+    item["title"] = col.title;
+    item["header"] = col.header;
+    item["visible"] = col.visible;
+    item["width"] = col.width;
+    map[col.key] = item;
+  }
+  return map;
+}
+
+QStringList QtBridge::tableColumnKeys() const {
+  QStringList keys;
+  keys.reserve(static_cast<qsizetype>(m_columns.size()));
+  for (const auto &col : m_columns) {
+    keys.append(col.key);
+  }
+  return keys;
+}
+
+bool QtBridge::isColumnVisible(const QString &colKey) const {
+  for (const auto &col : m_columns) {
+    if (col.key == colKey)
+      return col.visible;
+  }
+  return false;
+}
+
+int QtBridge::getColumnWidth(const QString &colKey) const {
+  for (const auto &col : m_columns) {
+    if (col.key == colKey)
+      return col.width;
+  }
+  return 100;
+}
+
+void QtBridge::setColumnVisible(const QString &colKey, bool visible) {
+  bool changed = false;
+  for (auto &col : m_columns) {
+    if (col.key == colKey && col.visible != visible) {
+      col.visible = visible;
+      changed = true;
+      break;
+    }
+  }
+  if (changed) {
+    saveColumnSettings();
+    emit tableColumnsChanged();
+  }
+}
+
+void QtBridge::toggleColumnVisible(const QString &colKey) {
+  for (auto &col : m_columns) {
+    if (col.key == colKey) {
+      col.visible = !col.visible;
+      saveColumnSettings();
+      emit tableColumnsChanged();
+      break;
+    }
+  }
+}
+
+void QtBridge::setColumnWidth(const QString &colKey, int width) {
+  for (auto &col : m_columns) {
+    if (col.key == colKey) {
+      col.width = std::max(20, width);
+      saveColumnSettings();
+      emit tableColumnsChanged();
+      break;
+    }
+  }
+}
+
+void QtBridge::autoSizeColumn(const QString &colKey) {
+  auto tracks = m_trackModel ? m_trackModel->tracks() : m_library.getTracks();
+  for (auto &col : m_columns) {
+    if (col.key == colKey) {
+      int optimalWidth = col.defaultWidth;
+      size_t maxLen = col.header.length();
+      for (const auto &t : tracks) {
+        if (colKey == "title")
+          maxLen = std::max(maxLen, t.title.length());
+        else if (colKey == "artist")
+          maxLen = std::max(maxLen, t.artist.length());
+        else if (colKey == "album")
+          maxLen = std::max(maxLen, t.album.length());
+        else if (colKey == "albumArtist")
+          maxLen = std::max(maxLen, t.albumArtist.length());
+        else if (colKey == "genre")
+          maxLen = std::max(maxLen, t.genre.length());
+        else if (colKey == "filePath")
+          maxLen = std::max(maxLen, t.filePath.length());
+      }
+      if (colKey == "title")
+        optimalWidth = std::clamp(static_cast<int>(maxLen * 7 + 24), 120, 360);
+      else if (colKey == "artist" || colKey == "album" || colKey == "albumArtist")
+        optimalWidth = std::clamp(static_cast<int>(maxLen * 7 + 24), 80, 260);
+      else if (colKey == "genre")
+        optimalWidth = std::clamp(static_cast<int>(maxLen * 7 + 20), 70, 160);
+      else if (colKey == "filePath")
+        optimalWidth = std::clamp(static_cast<int>(maxLen * 6 + 20), 140, 400);
+
+      col.width = optimalWidth;
+      break;
+    }
+  }
+  saveColumnSettings();
+  emit tableColumnsChanged();
+}
+
+void QtBridge::autoSizeAllColumns() {
+  auto tracks = m_trackModel ? m_trackModel->tracks() : m_library.getTracks();
+  for (auto &col : m_columns) {
+    if (!col.visible)
+      continue;
+    int optimalWidth = col.defaultWidth;
+    size_t maxLen = col.header.length();
+    for (const auto &t : tracks) {
+      if (col.key == "title")
+        maxLen = std::max(maxLen, t.title.length());
+      else if (col.key == "artist")
+        maxLen = std::max(maxLen, t.artist.length());
+      else if (col.key == "album")
+        maxLen = std::max(maxLen, t.album.length());
+      else if (col.key == "albumArtist")
+        maxLen = std::max(maxLen, t.albumArtist.length());
+      else if (col.key == "genre")
+        maxLen = std::max(maxLen, t.genre.length());
+      else if (col.key == "filePath")
+        maxLen = std::max(maxLen, t.filePath.length());
+    }
+    if (col.key == "title")
+      optimalWidth = std::clamp(static_cast<int>(maxLen * 7 + 24), 120, 360);
+    else if (col.key == "artist" || col.key == "album" || col.key == "albumArtist")
+      optimalWidth = std::clamp(static_cast<int>(maxLen * 7 + 24), 80, 260);
+    else if (col.key == "genre")
+      optimalWidth = std::clamp(static_cast<int>(maxLen * 7 + 20), 70, 160);
+    else if (col.key == "filePath")
+      optimalWidth = std::clamp(static_cast<int>(maxLen * 6 + 20), 140, 400);
+
+    col.width = optimalWidth;
+  }
+  saveColumnSettings();
+  emit tableColumnsChanged();
+}
+
+void QtBridge::resetTableColumns() {
+  for (auto &col : m_columns) {
+    col.visible = col.defaultVisible;
+    col.width = col.defaultWidth;
+  }
+  saveColumnSettings();
+  emit tableColumnsChanged();
+}
+
+void QtBridge::loadColumnSettings() {
+  QSettings s("ParakeetAudio", "Parakeet");
+  s.beginGroup("table_columns");
+  for (auto &col : m_columns) {
+    if (s.contains(col.key + "/visible")) {
+      col.visible = s.value(col.key + "/visible").toBool();
+    }
+    if (s.contains(col.key + "/width")) {
+      col.width = s.value(col.key + "/width").toInt();
+    }
+  }
+  s.endGroup();
+}
+
+void QtBridge::saveColumnSettings() {
+  QSettings s("ParakeetAudio", "Parakeet");
+  s.beginGroup("table_columns");
+  for (const auto &col : m_columns) {
+    s.setValue(col.key + "/visible", col.visible);
+    s.setValue(col.key + "/width", col.width);
+  }
+  s.endGroup();
 }

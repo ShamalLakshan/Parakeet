@@ -1,5 +1,8 @@
 #include "TrackListModel.hpp"
 #include "core/ports/IMusicDatabasePort.hpp"
+#include <QDateTime>
+#include <QFileInfo>
+#include <QSettings>
 #include <algorithm>
 
 TrackListModel::TrackListModel(core::IMusicDatabasePort *dbPort,
@@ -20,6 +23,9 @@ void TrackListModel::setTracks(const std::vector<core::Track> &tracks) {
   m_filteredTracks = tracks;
   m_filterText.clear();
   m_selectedIndices.clear();
+  if (!m_sortColumn.isEmpty()) {
+    applySort();
+  }
   endResetModel();
   emit countChanged();
   emit selectionChanged();
@@ -70,20 +76,22 @@ void TrackListModel::setFilter(const QString &filterText) {
 void TrackListModel::applyFilter() {
   if (m_filterText.trimmed().isEmpty()) {
     m_filteredTracks = m_allTracks;
-    return;
-  }
-
-  m_filteredTracks.clear();
-  QString lower = m_filterText.toLower();
-  for (const auto &t : m_allTracks) {
-    QString title = QString::fromStdString(t.title).toLower();
-    QString artist = QString::fromStdString(t.artist).toLower();
-    QString album = QString::fromStdString(t.album).toLower();
-    QString genre = QString::fromStdString(t.genre).toLower();
-    if (title.contains(lower) || artist.contains(lower) ||
-        album.contains(lower) || genre.contains(lower)) {
-      m_filteredTracks.push_back(t);
+  } else {
+    m_filteredTracks.clear();
+    QString lower = m_filterText.toLower();
+    for (const auto &t : m_allTracks) {
+      QString title = QString::fromStdString(t.title).toLower();
+      QString artist = QString::fromStdString(t.artist).toLower();
+      QString album = QString::fromStdString(t.album).toLower();
+      QString genre = QString::fromStdString(t.genre).toLower();
+      if (title.contains(lower) || artist.contains(lower) ||
+          album.contains(lower) || genre.contains(lower)) {
+        m_filteredTracks.push_back(t);
+      }
     }
+  }
+  if (!m_sortColumn.isEmpty()) {
+    applySort();
   }
 }
 
@@ -142,6 +150,46 @@ QVariant TrackListModel::data(const QModelIndex &index, int role) const {
     return QString::fromStdString(track.audiophileBadge());
   case IsSelectedRole:
     return m_selectedIndices.find(index.row()) != m_selectedIndices.end();
+  case FileSizeBytesRole:
+    return static_cast<qint64>(track.fileSizeBytes);
+  case FileSizeFormattedRole: {
+    quint64 bytes = track.fileSizeBytes;
+    if (bytes == 0 && !track.filePath.empty()) {
+      QFileInfo fi(QString::fromStdString(track.filePath));
+      if (fi.exists())
+        bytes = static_cast<quint64>(fi.size());
+    }
+    if (bytes == 0)
+      return QString("");
+    if (bytes < 1024 * 1024) {
+      return QString("%1 KB").arg(bytes / 1024);
+    }
+    double mb = static_cast<double>(bytes) / (1024.0 * 1024.0);
+    return QString("%1 MB").arg(QString::number(mb, 'f', 1));
+  }
+  case DateAddedRole:
+    return static_cast<qint64>(track.dateAdded);
+  case DateAddedFormattedRole: {
+    if (track.dateAdded > 0) {
+      return QDateTime::fromSecsSinceEpoch(track.dateAdded)
+          .toString("yyyy-MM-dd");
+    }
+    if (!track.filePath.empty()) {
+      QFileInfo fi(QString::fromStdString(track.filePath));
+      if (fi.exists()) {
+        return fi.lastModified().toString("yyyy-MM-dd");
+      }
+    }
+    return QString("");
+  }
+  case PlayCountRole: {
+    QSettings s("Parakeet", "ParakeetPlayer");
+    return s.value("playcounts/" + QString::fromStdString(track.id), 0).toInt();
+  }
+  case RatingRole: {
+    QSettings s("Parakeet", "ParakeetPlayer");
+    return s.value("ratings/" + QString::fromStdString(track.id), 0).toInt();
+  }
   default:
     return QVariant();
   }
@@ -158,6 +206,7 @@ QVariantMap TrackListModel::getTrackAt(int index) const {
   map["title"] = QString::fromStdString(t.title);
   map["artist"] = QString::fromStdString(t.artist);
   map["album"] = QString::fromStdString(t.album);
+  map["albumArtist"] = QString::fromStdString(t.albumArtist);
   map["year"] = t.year;
   map["genre"] = QString::fromStdString(t.genre);
   map["trackNumber"] = t.trackNumber;
@@ -171,6 +220,46 @@ QVariantMap TrackListModel::getTrackAt(int index) const {
   map["artHash"] = QString::fromStdString(t.artHash);
   map["audiophileBadge"] = QString::fromStdString(t.audiophileBadge());
   map["isSelected"] = m_selectedIndices.find(index) != m_selectedIndices.end();
+  map["fileSizeBytes"] = static_cast<qint64>(t.fileSizeBytes);
+
+  quint64 bytes = t.fileSizeBytes;
+  if (bytes == 0 && !t.filePath.empty()) {
+    QFileInfo fi(QString::fromStdString(t.filePath));
+    if (fi.exists())
+      bytes = static_cast<quint64>(fi.size());
+  }
+  if (bytes > 0) {
+    if (bytes < 1024 * 1024) {
+      map["fileSizeFormatted"] = QString("%1 KB").arg(bytes / 1024);
+    } else {
+      double mb = static_cast<double>(bytes) / (1024.0 * 1024.0);
+      map["fileSizeFormatted"] = QString("%1 MB").arg(QString::number(mb, 'f', 1));
+    }
+  } else {
+    map["fileSizeFormatted"] = QString("");
+  }
+
+  map["dateAdded"] = static_cast<qint64>(t.dateAdded);
+  if (t.dateAdded > 0) {
+    map["dateAddedFormatted"] =
+        QDateTime::fromSecsSinceEpoch(t.dateAdded).toString("yyyy-MM-dd");
+  } else if (!t.filePath.empty()) {
+    QFileInfo fi(QString::fromStdString(t.filePath));
+    if (fi.exists()) {
+      map["dateAddedFormatted"] = fi.lastModified().toString("yyyy-MM-dd");
+    } else {
+      map["dateAddedFormatted"] = QString("");
+    }
+  } else {
+    map["dateAddedFormatted"] = QString("");
+  }
+
+  QSettings s("Parakeet", "ParakeetPlayer");
+  map["playCount"] =
+      s.value("playcounts/" + QString::fromStdString(t.id), 0).toInt();
+  map["rating"] =
+      s.value("ratings/" + QString::fromStdString(t.id), 0).toInt();
+
   return map;
 }
 
@@ -196,6 +285,12 @@ QHash<int, QByteArray> TrackListModel::roleNames() const {
   roles[ArtHashRole] = "artHash";
   roles[AudiophileBadgeRole] = "audiophileBadge";
   roles[IsSelectedRole] = "isSelected";
+  roles[FileSizeBytesRole] = "fileSizeBytes";
+  roles[FileSizeFormattedRole] = "fileSizeFormatted";
+  roles[DateAddedRole] = "dateAdded";
+  roles[DateAddedFormattedRole] = "dateAddedFormatted";
+  roles[PlayCountRole] = "playCount";
+  roles[RatingRole] = "rating";
   return roles;
 }
 
@@ -332,3 +427,127 @@ void TrackListModel::removeSelected() {
   }
   setTracks(remainingTracks);
 }
+
+void TrackListModel::sortBy(const QString &columnKey, bool ascending) {
+  m_sortColumn = columnKey;
+  m_sortAscending = ascending;
+  beginResetModel();
+  m_selectedIndices.clear();
+  applySort();
+  endResetModel();
+  emit selectionChanged();
+  emit sortChanged();
+}
+
+void TrackListModel::toggleSort(const QString &columnKey) {
+  if (m_sortColumn == columnKey) {
+    sortBy(columnKey, !m_sortAscending);
+  } else {
+    sortBy(columnKey, true);
+  }
+}
+
+void TrackListModel::clearSort() {
+  m_sortColumn.clear();
+  m_sortAscending = true;
+  beginResetModel();
+  m_selectedIndices.clear();
+  applyFilter();
+  endResetModel();
+  emit selectionChanged();
+  emit sortChanged();
+}
+
+void TrackListModel::applySort() {
+  if (m_sortColumn.isEmpty() || m_filteredTracks.empty())
+    return;
+
+  auto compareTracks = [this](const core::Track &a, const core::Track &b) -> bool {
+    int cmp = 0;
+    if (m_sortColumn == "trackNumber") {
+      if (a.trackNumber != b.trackNumber)
+        cmp = a.trackNumber < b.trackNumber ? -1 : 1;
+    } else if (m_sortColumn == "title") {
+      cmp = QString::compare(QString::fromStdString(a.title),
+                             QString::fromStdString(b.title),
+                             Qt::CaseInsensitive);
+    } else if (m_sortColumn == "artist") {
+      cmp = QString::compare(QString::fromStdString(a.artist),
+                             QString::fromStdString(b.artist),
+                             Qt::CaseInsensitive);
+    } else if (m_sortColumn == "album") {
+      cmp = QString::compare(QString::fromStdString(a.album),
+                             QString::fromStdString(b.album),
+                             Qt::CaseInsensitive);
+    } else if (m_sortColumn == "albumArtist") {
+      cmp = QString::compare(QString::fromStdString(a.albumArtist),
+                             QString::fromStdString(b.albumArtist),
+                             Qt::CaseInsensitive);
+    } else if (m_sortColumn == "genre") {
+      cmp = QString::compare(QString::fromStdString(a.genre),
+                             QString::fromStdString(b.genre),
+                             Qt::CaseInsensitive);
+    } else if (m_sortColumn == "year") {
+      if (a.year != b.year)
+        cmp = a.year < b.year ? -1 : 1;
+    } else if (m_sortColumn == "duration" || m_sortColumn == "durationMs") {
+      if (a.durationMs != b.durationMs)
+        cmp = a.durationMs < b.durationMs ? -1 : 1;
+    } else if (m_sortColumn == "bitrate") {
+      if (a.bitrate != b.bitrate)
+        cmp = a.bitrate < b.bitrate ? -1 : 1;
+    } else if (m_sortColumn == "sampleRate") {
+      if (a.sampleRate != b.sampleRate)
+        cmp = a.sampleRate < b.sampleRate ? -1 : 1;
+    } else if (m_sortColumn == "bitDepth") {
+      if (a.bitDepth != b.bitDepth)
+        cmp = a.bitDepth < b.bitDepth ? -1 : 1;
+    } else if (m_sortColumn == "codec") {
+      cmp = QString::compare(QString::fromStdString(a.codec),
+                             QString::fromStdString(b.codec),
+                             Qt::CaseInsensitive);
+    } else if (m_sortColumn == "filePath") {
+      cmp = QString::compare(QString::fromStdString(a.filePath),
+                             QString::fromStdString(b.filePath),
+                             Qt::CaseInsensitive);
+    } else if (m_sortColumn == "fileSize" || m_sortColumn == "fileSizeBytes") {
+      if (a.fileSizeBytes != b.fileSizeBytes)
+        cmp = a.fileSizeBytes < b.fileSizeBytes ? -1 : 1;
+    } else if (m_sortColumn == "dateAdded") {
+      if (a.dateAdded != b.dateAdded)
+        cmp = a.dateAdded < b.dateAdded ? -1 : 1;
+    } else if (m_sortColumn == "rating") {
+      QSettings s("Parakeet", "ParakeetPlayer");
+      int ra = s.value("ratings/" + QString::fromStdString(a.id), 0).toInt();
+      int rb = s.value("ratings/" + QString::fromStdString(b.id), 0).toInt();
+      if (ra != rb)
+        cmp = ra < rb ? -1 : 1;
+    } else if (m_sortColumn == "playCount") {
+      QSettings s("Parakeet", "ParakeetPlayer");
+      int pa = s.value("playcounts/" + QString::fromStdString(a.id), 0).toInt();
+      int pb = s.value("playcounts/" + QString::fromStdString(b.id), 0).toInt();
+      if (pa != pb)
+        cmp = pa < pb ? -1 : 1;
+    }
+
+    if (cmp == 0) {
+      int albumCmp = QString::compare(QString::fromStdString(a.album),
+                                      QString::fromStdString(b.album),
+                                      Qt::CaseInsensitive);
+      if (albumCmp != 0)
+        return albumCmp < 0;
+      if (a.discNumber != b.discNumber)
+        return a.discNumber < b.discNumber;
+      if (a.trackNumber != b.trackNumber)
+        return a.trackNumber < b.trackNumber;
+      return QString::compare(QString::fromStdString(a.title),
+                              QString::fromStdString(b.title),
+                              Qt::CaseInsensitive) < 0;
+    }
+
+    return m_sortAscending ? (cmp < 0) : (cmp > 0);
+  };
+
+  std::sort(m_filteredTracks.begin(), m_filteredTracks.end(), compareTracks);
+}
+
