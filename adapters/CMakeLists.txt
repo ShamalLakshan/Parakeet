@@ -21,6 +21,12 @@ qt_add_library(ui_adapter STATIC
     storage/SqliteDatabaseAdapter.cpp
     audio/BitPerfectAudioAdapter.hpp
     audio/BitPerfectAudioAdapter.cpp
+    ${CMAKE_SOURCE_DIR}/themes/themes.qrc
+)
+
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/
+    DESTINATION share/parakeet/themes
+    FILES_MATCHING PATTERN "*.json"
 )
 
 qt_add_qml_module(ui_adapter

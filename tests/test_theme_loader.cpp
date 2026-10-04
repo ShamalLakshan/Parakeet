@@ -164,3 +164,70 @@ TEST_F(ThemeLoaderTest, BuiltInThemesSwitching) {
     EXPECT_EQ(loader.themeId(), "dark-studio");
     EXPECT_EQ(loader.background(), "#141416");
 }
+
+TEST_F(ThemeLoaderTest, DynamicDiscoveryAndAvailableThemes) {
+    adapters::ThemeLoader loader;
+    QVariantList list = loader.availableThemes();
+    EXPECT_FALSE(list.isEmpty());
+
+    bool foundDarkStudio = false;
+    for (const auto& item : list) {
+        QVariantMap map = item.toMap();
+        if (map["id"].toString() == "dark-studio") {
+            foundDarkStudio = true;
+            EXPECT_EQ(map["name"].toString(), "Dark Studio");
+            EXPECT_TRUE(map.contains("colors"));
+            QVariantMap colors = map["colors"].toMap();
+            EXPECT_EQ(colors["background"].toString(), "#141416");
+            EXPECT_EQ(colors["accent"].toString(), "#3a82f7");
+        }
+    }
+    EXPECT_TRUE(foundDarkStudio);
+}
+
+TEST_F(ThemeLoaderTest, ThemeInstallationExportAndDelete) {
+    adapters::ThemeLoader loader;
+    QString jsonContent = makeValidThemeJson();
+
+    QTemporaryFile tempThemeFile;
+    ASSERT_TRUE(tempThemeFile.open());
+    tempThemeFile.write(jsonContent.toUtf8());
+    tempThemeFile.close();
+
+    // Install theme
+    bool installed = loader.installTheme(tempThemeFile.fileName());
+    EXPECT_TRUE(installed);
+    EXPECT_EQ(loader.themeId(), "test-theme");
+    EXPECT_EQ(loader.background(), "#112233");
+
+    // Export theme
+    QTemporaryFile tempExportFile;
+    ASSERT_TRUE(tempExportFile.open());
+    QString exportPath = tempExportFile.fileName();
+    tempExportFile.close();
+
+    bool exported = loader.exportTheme("test-theme", exportPath);
+    EXPECT_TRUE(exported);
+    QFile exportedFile(exportPath);
+    EXPECT_TRUE(exportedFile.open(QIODevice::ReadOnly));
+    QJsonDocument exportDoc = QJsonDocument::fromJson(exportedFile.readAll());
+    EXPECT_TRUE(exportDoc.isObject());
+    EXPECT_EQ(exportDoc.object()["meta"].toObject()["id"].toString(), "test-theme");
+
+    // Delete user theme
+    bool deleted = loader.deleteTheme("test-theme");
+    EXPECT_TRUE(deleted);
+    EXPECT_EQ(loader.themeId(), "dark-studio");
+
+    // Deleting built-in theme should fail
+    bool deleteBuiltIn = loader.deleteTheme("dark-studio");
+    EXPECT_FALSE(deleteBuiltIn);
+}
+
+TEST_F(ThemeLoaderTest, ThemeSearchPathsInspection) {
+    adapters::ThemeLoader loader;
+    QStringList paths = loader.themeSearchPaths();
+    EXPECT_FALSE(paths.isEmpty());
+    EXPECT_TRUE(paths.contains(":/themes"));
+}
+

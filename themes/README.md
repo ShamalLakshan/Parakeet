@@ -1,0 +1,92 @@
+# Parakeet Visual Themes
+
+Parakeet features a dynamic, community-driven JSON theme engine with hot-reloading support. This directory contains bundled base themes and serves as a reference for creating and sharing custom themes.
+
+---
+
+## Bundled Themes
+
+| Theme ID | Name | Style | Description |
+|---|---|---|---|
+| `dark-studio` | **Dark Studio** | Dark | Flagship dark theme engineered for studio listening environments |
+| `nord-audiophile` | **Nord** | Dark (Cool) | Arctic, north-bluish clean palette tailored for night sessions |
+| `solarized-dark` | **Solarized Dark** | Dark (Warm) | Low-contrast palette calibrated for eye comfort |
+| `dracula` | **Dracula** | Dark (High Contrast) | Vibrant purple and cyan accents on deep slate background |
+| `solarized-light` | **Solarized Light** | Light (Warm) | Warm daytime palette designed for bright listening rooms |
+
+---
+
+## Creating a Community Theme
+
+Every theme is defined as a standalone `.json` file that complies with [`docs/theme-schema.json`](../docs/theme-schema.json).
+
+### Theme File Structure
+
+```json
+{
+  "$schema": "https://parakeet-audio.org/schemas/theme-v1.json",
+  "meta": {
+    "id": "my-custom-theme",
+    "name": "My Custom Theme",
+    "author": "Your Name",
+    "version": "1.0.0",
+    "apiVersion": "0.1-unstable",
+    "description": "Short summary of the aesthetic"
+  },
+  "colors": {
+    "background": "#141416",
+    "surface": "#161619",
+    "surfaceElevated": "#1e1e24",
+    "panelBorder": "#24242c",
+    "accent": "#3a82f7",
+    "accentHover": "#5c9eff",
+    "textPrimary": "#ffffff",
+    "textSecondary": "#c0c0d0",
+    "textMuted": "#777788",
+    "selection": "#1f2a3e",
+    "error": "#ff4a4a",
+    "warning": "#f5a623",
+    "success": "#28c840"
+  },
+  "typography": {
+    "fontFamily": "Inter, sans-serif",
+    "fontSizeSmall": 9,
+    "fontSizeBase": 11,
+    "fontSizeLarge": 14,
+    "fontSizeTitle": 18,
+    "fontWeightScale": 1.0,
+    "lineHeightScale": 1.2
+  },
+  "metrics": {
+    "spacingSmall": 4,
+    "spacingMedium": 8,
+    "spacingLarge": 16,
+    "cornerRadiusSmall": 2,
+    "cornerRadiusMedium": 4,
+    "panelPadding": 10
+  }
+}
+```
+
+---
+
+## Theme Discovery & Search Paths
+
+Parakeet discovers themes dynamically at startup and watches for changes in real time. Theme search paths are scanned in the following priority order (higher overrides lower):
+
+1. **User Themes Directory** *(Highest priority; allows overriding bundled themes)*:
+   - **Linux**: `~/.local/share/Parakeet/themes/`
+   - **macOS**: `~/Library/Application Support/Parakeet/themes/`
+   - **Windows**: `%APPDATA%/Parakeet/themes/`
+2. **System & Application Directories**:
+   - `<install-prefix>/share/parakeet/themes/`
+   - `<binary-directory>/themes/`
+   - Current working directory `./themes/`
+3. **Embedded Qt Resources** *(Fail-safe bundled fallback)*:
+   - `:/themes/*.json`
+
+---
+
+## Real-Time Hot Reloading
+
+When developing themes, any modification to a `.json` file in a watched directory immediately reloads the theme tokens and live-updates Parakeet's UI without restarting the application.

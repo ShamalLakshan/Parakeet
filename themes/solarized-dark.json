@@ -1,0 +1,43 @@
+{
+  "$schema": "https://parakeet-audio.org/schemas/theme-v1.json",
+  "meta": {
+    "id": "solarized-dark",
+    "name": "Solarized Dark",
+    "author": "Parakeet Community",
+    "version": "1.0.0",
+    "apiVersion": "0.1-unstable",
+    "description": "Warm low-contrast palette calibrated for eye comfort"
+  },
+  "colors": {
+    "background": "#002b36",
+    "surface": "#073642",
+    "surfaceElevated": "#094452",
+    "panelBorder": "#586e75",
+    "accent": "#268bd2",
+    "accentHover": "#2aa198",
+    "textPrimary": "#fdf6e3",
+    "textSecondary": "#93a1a1",
+    "textMuted": "#657b83",
+    "selection": "#094452",
+    "error": "#dc322f",
+    "warning": "#b58900",
+    "success": "#859900"
+  },
+  "typography": {
+    "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    "fontSizeSmall": 9,
+    "fontSizeBase": 11,
+    "fontSizeLarge": 14,
+    "fontSizeTitle": 18,
+    "fontWeightScale": 1.0,
+    "lineHeightScale": 1.2
+  },
+  "metrics": {
+    "spacingSmall": 4,
+    "spacingMedium": 8,
+    "spacingLarge": 16,
+    "cornerRadiusSmall": 3,
+    "cornerRadiusMedium": 6,
+    "panelPadding": 10
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://parakeet-audio.org/schemas/theme-v1.json",
+  "meta": {
+    "id": "nord-audiophile",
+    "name": "Nord",
+    "author": "Parakeet Community",
+    "version": "1.0.0",
+    "apiVersion": "0.1-unstable",
+    "description": "Arctic, north-bluish clean palette tailored for night listening"
+  },
+  "colors": {
+    "background": "#2e3440",
+    "surface": "#3b4252",
+    "surfaceElevated": "#434c5e",
+    "panelBorder": "#4c566a",
+    "accent": "#88c0d0",
+    "accentHover": "#8fbcbb",
+    "textPrimary": "#eceff4",
+    "textSecondary": "#d8dee9",
+    "textMuted": "#7e889b",
+    "selection": "#434c5e",
+    "error": "#bf616a",
+    "warning": "#ebcb8b",
+    "success": "#a3be8c"
+  },
+  "typography": {
+    "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    "fontSizeSmall": 9,
+    "fontSizeBase": 11,
+    "fontSizeLarge": 14,
+    "fontSizeTitle": 18,
+    "fontWeightScale": 1.0,
+    "lineHeightScale": 1.2
+  },
+  "metrics": {
+    "spacingSmall": 4,
+    "spacingMedium": 8,
+    "spacingLarge": 16,
+    "cornerRadiusSmall": 3,
+    "cornerRadiusMedium": 6,
+    "panelPadding": 12
+  }
+}
