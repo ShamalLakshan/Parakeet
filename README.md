@@ -68,25 +68,29 @@ ctest --test-dir build --output-on-failure
 Parakeet stands on the shoulders of outstanding open-source libraries, audio standards, and pioneer desktop audio players:
 
 ### Core Libraries & Toolkits
-- **[Qt 6](https://www.qt.io/)**: Modern cross-platform framework and Qt Quick / QML declarative UI engine powering Parakeet's front-end and multimedia pipeline.
-- **[TagLib](https://taglib.org/)**: The premier audio metadata library utilized for fast, robust parsing and writing of ID3, Vorbis, and APE tags across all major audio formats.
-- **[SQLite](https://www.sqlite.org/)**: Ultra-reliable, serverless SQL database engine powering Parakeet's local music library index and track caching.
-- **[FFmpeg](https://ffmpeg.org/)**: Comprehensive multimedia suite powering underlying audio decoding and stream demuxing.
-- **[GoogleTest](https://github.com/google/googletest)**: Google's C++ testing and mocking framework utilized for Parakeet's automated unit test suites.
+- [Qt 6](https://www.qt.io/)
+- [TagLib](https://taglib.org/)
+- [SQLite](https://www.sqlite.org/)
+- [FFmpeg](https://ffmpeg.org/)
+- [GoogleTest](https://github.com/google/googletest)
 
 ### Audio Standards & Protocols
-- **[ReplayGain 2.0 Specification](https://wiki.hydrogenaud.io/index.php?title=ReplayGain_2.0_specification) & [ITU-R BS.1770-4](https://www.itu.int/rec/R-REC-BS.1770/en)**: Open specifications and algorithms for loudness measurement, automatic gain control, and true-peak limiting.
-- **[M3U / Extended M3U8 Playlist Format](https://en.wikipedia.org/wiki/M3U)**: Standard playlist format with `#EXTM3U` and `#EXTINF` directives supported for playlist import and export.
-- **[Audioscrobbler Protocol](https://www.last.fm/api/scrobbling) & [ListenBrainz API](https://listenbrainz.readthedocs.io/en/latest/users/api/)**: Open metadata APIs enabling listening history tracking and scrobble synchronization.
+- [ReplayGain 2.0 Specification](https://wiki.hydrogenaud.io/index.php?title=ReplayGain_2.0_specification)
+- [ITU-R BS.1770-4](https://www.itu.int/rec/R-REC-BS.1770/en)
+- [M3U / Extended M3U8 Playlist Format](https://en.wikipedia.org/wiki/M3U)
+- [Audioscrobbler Protocol](https://www.last.fm/api/scrobbling)
+- [ListenBrainz API](https://listenbrainz.readthedocs.io/en/latest/users/api/)
 
 ### Desktop Player Ergonomics & Design References
-- **[foobar2000](https://www.foobar2000.org/)**: Inspiration for advanced table ergonomics, custom column configurations, content auto-sizing, keyboard-first desktop accelerators, and tag editing workflows.
-- **[MusicBee](https://getmusicbee.com/)**: Inspiration for multi-panel workspace organization (Column Browser, Track Details, and Right Inspector drawer).
-- **[Strawberry Music Player](https://www.strawberrymusicplayer.org/) & [Clementine](https://www.clementine-player.org/)**: Pioneers of bit-perfect audiophile delivery, local database indexing, cover art cache architecture, and scrobbling integrations on the Linux desktop.
+- [foobar2000](https://www.foobar2000.org/)
+- [MusicBee](https://getmusicbee.com/)
+- [Strawberry Music Player](https://www.strawberrymusicplayer.org/)
+- [Clementine](https://www.clementine-player.org/)
 
 ### Typography & Visual Design
-- **[Inter Typeface](https://rsms.me/inter/)**: Created by Rasmus Andersson, providing clean, highly legible typography crafted specifically for modern desktop interfaces.
-- **[Tabler Icons](https://tabler-icons.io/) & [Feather Icons](https://feathericons.com/)**: Design references for Parakeet's 2D canvas vector iconography.
+- [Inter Typeface](https://rsms.me/inter/)
+- [Tabler Icons](https://tabler-icons.io/)
+- [Feather Icons](https://feathericons.com/)
 
 ---
 
