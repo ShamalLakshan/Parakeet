@@ -1,5 +1,6 @@
 #include "TrackListModel.hpp"
 #include "core/ports/IMusicDatabasePort.hpp"
+#include <algorithm>
 
 TrackListModel::TrackListModel(core::IMusicDatabasePort *dbPort,
                                QObject *parent)
@@ -291,8 +292,11 @@ int TrackListModel::selectedCount() const {
 }
 
 QVariantList TrackListModel::getSelectedTrackIds() const {
+  std::vector<int> sortedIndices(m_selectedIndices.begin(),
+                                 m_selectedIndices.end());
+  std::sort(sortedIndices.begin(), sortedIndices.end());
   QVariantList list;
-  for (int idx : m_selectedIndices) {
+  for (int idx : sortedIndices) {
     if (idx >= 0 && idx < static_cast<int>(m_filteredTracks.size())) {
       list.append(QString::fromStdString(
           m_filteredTracks[static_cast<size_t>(idx)].id));
@@ -302,8 +306,11 @@ QVariantList TrackListModel::getSelectedTrackIds() const {
 }
 
 QVariantList TrackListModel::getSelectedTracks() const {
+  std::vector<int> sortedIndices(m_selectedIndices.begin(),
+                                 m_selectedIndices.end());
+  std::sort(sortedIndices.begin(), sortedIndices.end());
   QVariantList list;
-  for (int idx : m_selectedIndices) {
+  for (int idx : sortedIndices) {
     if (idx >= 0 && idx < static_cast<int>(m_filteredTracks.size())) {
       list.append(getTrackAt(idx));
     }

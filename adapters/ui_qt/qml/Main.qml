@@ -31,6 +31,16 @@ ApplicationWindow {
     property string selectedGenreFilter: "All"
     property string selectedArtistFilter: "All"
     property int rightPanelTab: 0 // 0: Properties, 1: Queue
+    property string activePlaylistName: ""
+
+    function playSelectedNow() {
+        var selIds = bridge.trackModel.getSelectedTrackIds();
+        if (selIds.length > 0) {
+            bridge.playSelectionNow(selIds);
+        } else if (trackTableListView.currentIndex >= 0) {
+            bridge.playTrackAtIndex(trackTableListView.currentIndex);
+        }
+    }
 
     function switchToExpandedView(albumTitle, albumArtist) {
         if (albumTitle && albumTitle.length > 0) {
@@ -206,6 +216,122 @@ ApplicationWindow {
         }
     }
 
+    Dialog {
+        id: deleteConfirmDialog
+        title: "Delete File from Disk"
+        modal: true
+        focus: true
+        anchors.centerIn: Overlay.overlay
+        width: 440
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        property var tracksToDelete: []
+
+        background: Rectangle {
+            color: Theme.surface
+            border.color: Theme.error
+            border.width: 1
+            radius: Theme.cornerRadiusMedium
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 14
+            anchors.fill: parent
+            anchors.margins: 18
+
+            RowLayout {
+                spacing: 12
+                Layout.fillWidth: true
+                VectorIcon {
+                    name: "trash"
+                    width: 24
+                    height: 24
+                    color: Theme.error
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    Text {
+                        text: deleteConfirmDialog.tracksToDelete.length > 1
+                            ? ("Delete " + deleteConfirmDialog.tracksToDelete.length + " Files from Disk?")
+                            : "Delete Audio File from Disk?"
+                        font.pixelSize: Theme.fontSizeLarge
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+                    Text {
+                        text: "This will permanently delete the selected audio file(s) from your storage device and library database. This action CANNOT be undone."
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.textMuted
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(120, Math.max(36, deleteConfirmDialog.tracksToDelete.length * 24 + 8))
+                color: Theme.surfaceElevated
+                border.color: Theme.panelBorder
+                border.width: 1
+                radius: Theme.cornerRadiusSmall
+                clip: true
+
+                ListView {
+                    anchors.fill: parent
+                    anchors.margins: 6
+                    model: deleteConfirmDialog.tracksToDelete
+                    ScrollBar.vertical: ScrollBar {}
+                    delegate: Text {
+                        width: parent.width
+                        text: (modelData.artist ? (modelData.artist + " - ") : "") + (modelData.title || modelData.filePath || "")
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.textSecondary
+                        elide: Text.ElideMiddle
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+
+                Button {
+                    text: "Cancel"
+                    onClicked: deleteConfirmDialog.close()
+                }
+
+                Button {
+                    contentItem: Text {
+                        text: "Delete Permanently"
+                        color: "#FFFFFF"
+                        font.bold: true
+                        font.pixelSize: Theme.fontSizeSmall
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        color: Theme.error
+                        radius: Theme.cornerRadiusSmall
+                    }
+                    onClicked: {
+                        var ids = [];
+                        for (var i = 0; i < deleteConfirmDialog.tracksToDelete.length; ++i) {
+                            if (deleteConfirmDialog.tracksToDelete[i].id) {
+                                ids.push(deleteConfirmDialog.tracksToDelete[i].id);
+                            }
+                        }
+                        deleteConfirmDialog.close();
+                        if (ids.length > 0) {
+                            bridge.deleteFilesFromDisk(ids);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     ContextMenu {
         id: trackContextMenu
         menuType: "track"
@@ -216,14 +342,16 @@ ApplicationWindow {
         onViewAlbumRequested: (album, artist) => {
             switchToExpandedView(album, artist);
         }
-        onEditTagsRequested: (track) => {
-            var sel = bridge.trackModel.getSelectedTracks();
-            if (sel.length > 1) {
-                tagEditorDialog.targetTracks = sel;
-                tagEditorDialog.targetTrack = sel[0];
-            } else {
+        onEditTagsRequested: (tracks) => {
+            if (tracks && tracks.length > 1) {
+                tagEditorDialog.targetTracks = tracks;
+                tagEditorDialog.targetTrack = tracks[0];
+            } else if (tracks && tracks.length === 1) {
                 tagEditorDialog.targetTracks = [];
-                tagEditorDialog.targetTrack = track;
+                tagEditorDialog.targetTrack = tracks[0];
+            } else if (trackContextMenu.targetTrack) {
+                tagEditorDialog.targetTracks = [];
+                tagEditorDialog.targetTrack = trackContextMenu.targetTrack;
             }
             tagEditorDialog.open();
         }
@@ -234,6 +362,19 @@ ApplicationWindow {
             }
             if (ids.length > 0) {
                 bridge.deleteSelectedTracks(ids);
+            }
+        }
+        onDeleteFilesFromDiskRequested: (tracks) => {
+            deleteConfirmDialog.tracksToDelete = tracks;
+            deleteConfirmDialog.open();
+        }
+        onNewPlaylistRequested: {
+            newPlaylistDialog.isSmart = false;
+            newPlaylistDialog.open();
+        }
+        onPlaylistTracksChanged: {
+            if (activeNavSection === 5 && activePlaylistName.length > 0) {
+                bridge.openPlaylist(activePlaylistName);
             }
         }
     }
@@ -306,6 +447,16 @@ ApplicationWindow {
                 tagEditorDialog.open();
             }
         }
+    }
+    Shortcut {
+        sequence: "Return"
+        enabled: !searchTextInput.activeFocus && !tagEditorDialog.visible && !newPlaylistDialog.visible && !preferencesDialog.visible && !diagnosticsDialog.visible && !shortcutsDialog.visible && !aboutDialog.visible && !sleepTimerDialog.visible && !openUrlDialog.visible && !deleteConfirmDialog.visible
+        onActivated: playSelectedNow()
+    }
+    Shortcut {
+        sequence: "Enter"
+        enabled: !searchTextInput.activeFocus && !tagEditorDialog.visible && !newPlaylistDialog.visible && !preferencesDialog.visible && !diagnosticsDialog.visible && !shortcutsDialog.visible && !aboutDialog.visible && !sleepTimerDialog.visible && !openUrlDialog.visible && !deleteConfirmDialog.visible
+        onActivated: playSelectedNow()
     }
     Shortcut {
         sequence: "Delete"
@@ -1557,6 +1708,7 @@ ApplicationWindow {
                                         onClicked: {
                                             activeNavSection = modelData.nav;
                                             mainViewMode = modelData.mode;
+                                            activePlaylistName = "";
                                             if (modelData.nav === 2 || modelData.nav === 3) {
                                                 showColumnBrowser = true;
                                             } else {
@@ -1598,8 +1750,50 @@ ApplicationWindow {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         activeNavSection = 4;
+                                        activePlaylistName = "";
                                         rightPanelTab = 1;
                                         showRightPanel = true;
+                                    }
+                                }
+                            }
+
+                            Repeater {
+                                model: bridge.availablePlaylists
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 26
+                                    color: (activeNavSection === 5 && activePlaylistName === modelData) ? Theme.selection : (plItemMouse.containsMouse ? Theme.surfaceElevated : "transparent")
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 16
+                                        anchors.rightMargin: 10
+                                        spacing: 8
+                                        VectorIcon {
+                                            name: "playlist"
+                                            width: 11
+                                            height: 11
+                                            color: (activeNavSection === 5 && activePlaylistName === modelData) ? Theme.accent : Theme.textMuted
+                                        }
+                                        Text {
+                                            text: modelData
+                                            font.pixelSize: 11
+                                            color: (activeNavSection === 5 && activePlaylistName === modelData) ? Theme.textPrimary : Theme.textSecondary
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+                                    MouseArea {
+                                        id: plItemMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            activeNavSection = 5;
+                                            activePlaylistName = modelData;
+                                            mainViewMode = 1;
+                                            bridge.openPlaylist(modelData);
+                                        }
                                     }
                                 }
                             }
@@ -2278,10 +2472,14 @@ ApplicationWindow {
                                                         bridge.trackModel.clearSelection();
                                                         bridge.trackModel.setRowSelected(index, true);
                                                     }
+                                                    var sel = bridge.trackModel.getSelectedTracks();
+                                                    trackContextMenu.targetTracks = sel;
                                                     trackContextMenu.targetTrack = { id: model.id, title: model.title, artist: model.artist, filePath: model.filePath, album: model.album, genre: model.genre, year: model.year, trackNumber: model.trackNumber };
                                                     trackContextMenu.targetFilePath = model.filePath;
                                                     trackContextMenu.targetTitle = model.title;
                                                     trackContextMenu.targetArtist = model.artist;
+                                                    trackContextMenu.isPlaylistView = (activeNavSection === 5);
+                                                    trackContextMenu.currentPlaylistName = activePlaylistName;
                                                     trackContextMenu.popup();
                                                 } else {
                                                     if (mouse.modifiers & Qt.ControlModifier) {
@@ -2832,7 +3030,21 @@ ApplicationWindow {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
+                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
                                             onDoubleClicked: bridge.playTrackFromDetail(index)
+                                            onClicked: (mouse) => {
+                                                if (mouse.button === Qt.RightButton) {
+                                                    var trk = { id: model.id, title: model.title, artist: model.artist, filePath: model.filePath, album: model.album, genre: model.genre, year: model.year, trackNumber: model.trackNumber };
+                                                    trackContextMenu.targetTracks = [trk];
+                                                    trackContextMenu.targetTrack = trk;
+                                                    trackContextMenu.targetFilePath = model.filePath;
+                                                    trackContextMenu.targetTitle = model.title;
+                                                    trackContextMenu.targetArtist = model.artist;
+                                                    trackContextMenu.isPlaylistView = false;
+                                                    trackContextMenu.currentPlaylistName = "";
+                                                    trackContextMenu.popup();
+                                                }
+                                            }
                                         }
                                     }
                                 }

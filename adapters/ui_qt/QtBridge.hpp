@@ -88,6 +88,8 @@ class QtBridge : public QObject {
   Q_PROPERTY(QString queueRemainingDurationStr READ queueRemainingDurationStr
                  NOTIFY queueChanged)
   Q_PROPERTY(int upNextCount READ upNextCount NOTIFY queueChanged)
+  Q_PROPERTY(QStringList availablePlaylists READ availablePlaylists NOTIFY
+                 playlistsChanged)
 
   // Library Statistics
   Q_PROPERTY(int totalAlbums READ totalAlbums NOTIFY libraryStatsChanged)
@@ -337,6 +339,7 @@ public:
   [[nodiscard]] int queueRemainingCount() const;
   [[nodiscard]] QString queueRemainingDurationStr() const;
   [[nodiscard]] int upNextCount() const;
+  [[nodiscard]] QStringList availablePlaylists() const;
 
   [[nodiscard]] int totalAlbums() const;
   [[nodiscard]] int totalTracks() const;
@@ -524,8 +527,12 @@ public:
 
   // Queue operations
   Q_INVOKABLE void playNow(const QString &trackId);
+  Q_INVOKABLE void playSelectionNow(const QStringList &selectedIds);
   Q_INVOKABLE void playNext(const QString &trackId);
+  Q_INVOKABLE void playTracksNext(const QStringList &trackIds);
   Q_INVOKABLE void queueLast(const QString &trackId);
+  Q_INVOKABLE void queueTracksLast(const QStringList &trackIds);
+  Q_INVOKABLE void playNextInAlbumShuffle(const QStringList &trackIds);
   Q_INVOKABLE void playAlbumNow(const QString &albumTitle,
                                 const QString &albumArtist);
   Q_INVOKABLE void playAlbumNext(const QString &albumTitle,
@@ -577,6 +584,11 @@ public:
   Q_INVOKABLE bool updateMultipleTrackTags(const QStringList &trackIds,
                                            const QVariantMap &tags);
   Q_INVOKABLE void deleteSelectedTracks(const QStringList &trackIds);
+  Q_INVOKABLE bool deleteFilesFromDisk(const QStringList &trackIds);
+  Q_INVOKABLE void setTracksRating(const QStringList &trackIds, int rating);
+  [[nodiscard]] Q_INVOKABLE int getTrackRating(const QString &trackId) const;
+  Q_INVOKABLE void toggleTracksFavorite(const QStringList &trackIds);
+  [[nodiscard]] Q_INVOKABLE bool isTrackFavorite(const QString &trackId) const;
   Q_INVOKABLE void refreshHistory();
 
   // Playback & DSP Settings
@@ -636,6 +648,11 @@ public:
   Q_INVOKABLE bool createSmartPlaylist(const QString &name,
                                        const QString &rulesJson);
   Q_INVOKABLE bool importPlaylist(const QString &filePath);
+  Q_INVOKABLE bool addTracksToPlaylist(const QString &playlistName,
+                                       const QVariantList &tracks);
+  Q_INVOKABLE bool removeTracksFromPlaylist(const QString &playlistName,
+                                            const QVariantList &tracks);
+  Q_INVOKABLE void openPlaylist(const QString &playlistName);
   Q_INVOKABLE int deduplicateTracks();
   Q_INVOKABLE bool clearCoverArtCache() {
     clearArtCache();
@@ -836,6 +853,8 @@ signals:
   void playbackRateChanged();
   void loopPointsChanged();
   void sleepTimerChanged();
+  void playlistsChanged();
+  void ratingsChanged();
 
 private:
   void setupPositionTimer();
