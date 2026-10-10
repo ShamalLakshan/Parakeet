@@ -1,11 +1,15 @@
 #pragma once
 
-#include <QObject>
-#include <QString>
-#include <QVariantList>
-#include <QVariantMap>
+#include <QCoreApplication>
+#include <QDir>
 #include <QFileSystemWatcher>
 #include <QJsonObject>
+#include <QMap>
+#include <QObject>
+#include <QString>
+#include <QStringList>
+#include <QVariantList>
+#include <QVariantMap>
 #include <memory>
 
 namespace adapters {
@@ -52,8 +56,21 @@ struct ThemeTokens {
     int panelPadding{10};
 };
 
+struct ThemeMetadata {
+    QString id;
+    QString name;
+    QString author;
+    QString version;
+    QString apiVersion;
+    QString description;
+    bool isBuiltIn{false};
+    bool isUserTheme{false};
+    QString filePath;
+    ThemeTokens tokens;
+};
+
 /**
- * @brief Manages JSON themes and hot-reloading.
+ * @brief Manages JSON themes, multi-tier search paths, dynamic discovery, and hot-reloading.
  */
 class ThemeLoader : public QObject {
     Q_OBJECT
@@ -147,6 +164,7 @@ public:
     [[nodiscard]] qreal uiScale() const { return m_uiScale; }
     [[nodiscard]] QString densityPreset() const { return m_densityPreset; }
     [[nodiscard]] QVariantList availableThemes() const { return m_availableThemes; }
+    [[nodiscard]] QString activeThemeFilePath() const { return m_activeThemeFilePath; }
 
     // Static validation and defaults
     static ThemeTokens getDefaultDarkStudioTheme();
@@ -161,8 +179,11 @@ public slots:
     void setDensityPreset(const QString& preset);
     bool loadThemeFromFile(const QString& filePath);
     bool installTheme(const QString& sourceFilePath);
+    bool deleteTheme(const QString& id);
+    bool exportTheme(const QString& id, const QString& destFilePath);
     void openThemesFolder();
     void refreshAvailableThemes();
+    [[nodiscard]] QStringList themeSearchPaths() const;
 
 signals:
     void themeChanged();
@@ -173,13 +194,16 @@ signals:
 private:
     void setupWatcher();
     void watchActiveFile(const QString& filePath);
-    QString getUserThemesDir() const;
+    [[nodiscard]] QString getUserThemesDir() const;
+    [[nodiscard]] QStringList getThemeSearchPaths() const;
 
     ThemeTokens m_tokens;
     qreal m_uiScale{1.0};
     QString m_densityPreset{"Standard"};
     QString m_activeThemeFilePath;
     QVariantList m_availableThemes;
+    QMap<QString, ThemeMetadata> m_themeRegistry;
+    QStringList m_watchedDirectories;
     QFileSystemWatcher m_watcher;
 };
 

@@ -18,6 +18,8 @@ class TrackListModel : public QAbstractListModel {
   Q_OBJECT
   Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
   Q_PROPERTY(int selectedCount READ selectedCount NOTIFY selectionChanged)
+  Q_PROPERTY(QString sortColumn READ sortColumn NOTIFY sortChanged)
+  Q_PROPERTY(bool sortAscending READ sortAscending NOTIFY sortChanged)
 
 public:
   enum TrackRoles {
@@ -40,7 +42,13 @@ public:
     CodecRole,
     ArtHashRole,
     AudiophileBadgeRole,
-    IsSelectedRole
+    IsSelectedRole,
+    FileSizeBytesRole,
+    FileSizeFormattedRole,
+    DateAddedRole,
+    DateAddedFormattedRole,
+    PlayCountRole,
+    RatingRole
   };
 
   explicit TrackListModel(core::IMusicDatabasePort *dbPort = nullptr,
@@ -78,16 +86,27 @@ public:
   [[nodiscard]] Q_INVOKABLE QVariantList getSelectedTracks() const;
   Q_INVOKABLE void removeSelected();
 
+  // Sorting
+  [[nodiscard]] QString sortColumn() const { return m_sortColumn; }
+  [[nodiscard]] bool sortAscending() const { return m_sortAscending; }
+  Q_INVOKABLE void sortBy(const QString &columnKey, bool ascending = true);
+  Q_INVOKABLE void toggleSort(const QString &columnKey);
+  Q_INVOKABLE void clearSort();
+
 signals:
   void countChanged();
   void selectionChanged();
+  void sortChanged();
 
 private:
   void applyFilter();
+  void applySort();
 
   core::IMusicDatabasePort *m_dbPort{nullptr};
   std::vector<core::Track> m_allTracks;
   std::vector<core::Track> m_filteredTracks;
   std::unordered_set<int> m_selectedIndices;
   QString m_filterText;
+  QString m_sortColumn;
+  bool m_sortAscending{true};
 };

@@ -233,6 +233,32 @@ Canvas {
             ctx.lineTo(w * 0.72, h * 0.54);
             ctx.closePath();
             ctx.fill();
+        } else if (name === "playlist") {
+            ctx.beginPath();
+            ctx.moveTo(w * 0.15, h * 0.28);
+            ctx.lineTo(w * 0.62, h * 0.28);
+            ctx.moveTo(w * 0.15, h * 0.48);
+            ctx.lineTo(w * 0.62, h * 0.48);
+            ctx.moveTo(w * 0.15, h * 0.68);
+            ctx.lineTo(w * 0.48, h * 0.68);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(w * 0.68, h * 0.68, w * 0.1, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(w * 0.78, h * 0.68);
+            ctx.lineTo(w * 0.78, h * 0.35);
+            ctx.lineTo(w * 0.88, h * 0.35);
+            ctx.stroke();
+        } else if (name === "heart") {
+            ctx.beginPath();
+            ctx.moveTo(w * 0.5, h * 0.78);
+            ctx.bezierCurveTo(w * 0.15, h * 0.5, w * 0.1, h * 0.25, w * 0.35, h * 0.25);
+            ctx.bezierCurveTo(w * 0.45, h * 0.25, w * 0.5, h * 0.35, w * 0.5, h * 0.35);
+            ctx.bezierCurveTo(w * 0.5, h * 0.35, w * 0.55, h * 0.25, w * 0.65, h * 0.25);
+            ctx.bezierCurveTo(w * 0.9, h * 0.25, w * 0.85, h * 0.5, w * 0.5, h * 0.78);
+            ctx.closePath();
+            ctx.fill();
         } else if (name === "trash") {
             ctx.beginPath();
             ctx.moveTo(w * 0.2, h * 0.3);

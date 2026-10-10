@@ -1,0 +1,9 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/themes">
+    <file alias="dark-studio.json">dark-studio.json</file>
+    <file alias="nord-audiophile.json">nord-audiophile.json</file>
+    <file alias="solarized-dark.json">solarized-dark.json</file>
+    <file alias="dracula.json">dracula.json</file>
+    <file alias="solarized-light.json">solarized-light.json</file>
+</qresource>
+</RCC>

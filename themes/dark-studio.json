@@ -1,0 +1,43 @@
+{
+  "$schema": "https://parakeet-audio.org/schemas/theme-v1.json",
+  "meta": {
+    "id": "dark-studio",
+    "name": "Dark Studio",
+    "author": "Parakeet",
+    "version": "1.0.0",
+    "apiVersion": "0.1-unstable",
+    "description": "Default professional dark studio theme engineered for deep listening"
+  },
+  "colors": {
+    "background": "#141416",
+    "surface": "#161619",
+    "surfaceElevated": "#1e1e24",
+    "panelBorder": "#24242c",
+    "accent": "#3a82f7",
+    "accentHover": "#5c9eff",
+    "textPrimary": "#ffffff",
+    "textSecondary": "#c0c0d0",
+    "textMuted": "#777788",
+    "selection": "#1f2a3e",
+    "error": "#ff4a4a",
+    "warning": "#f5a623",
+    "success": "#28c840"
+  },
+  "typography": {
+    "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    "fontSizeSmall": 9,
+    "fontSizeBase": 11,
+    "fontSizeLarge": 14,
+    "fontSizeTitle": 18,
+    "fontWeightScale": 1.0,
+    "lineHeightScale": 1.2
+  },
+  "metrics": {
+    "spacingSmall": 4,
+    "spacingMedium": 8,
+    "spacingLarge": 16,
+    "cornerRadiusSmall": 2,
+    "cornerRadiusMedium": 4,
+    "panelPadding": 10
+  }
+}

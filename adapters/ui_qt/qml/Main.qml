@@ -31,6 +31,16 @@ ApplicationWindow {
     property string selectedGenreFilter: "All"
     property string selectedArtistFilter: "All"
     property int rightPanelTab: 0 // 0: Properties, 1: Queue
+    property string activePlaylistName: ""
+
+    function playSelectedNow() {
+        var selIds = bridge.trackModel.getSelectedTrackIds();
+        if (selIds.length > 0) {
+            bridge.playSelectionNow(selIds);
+        } else if (trackTableListView.currentIndex >= 0) {
+            bridge.playTrackAtIndex(trackTableListView.currentIndex);
+        }
+    }
 
     function switchToExpandedView(albumTitle, albumArtist) {
         if (albumTitle && albumTitle.length > 0) {
@@ -206,6 +216,122 @@ ApplicationWindow {
         }
     }
 
+    Dialog {
+        id: deleteConfirmDialog
+        title: "Delete File from Disk"
+        modal: true
+        focus: true
+        anchors.centerIn: Overlay.overlay
+        width: 440
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        property var tracksToDelete: []
+
+        background: Rectangle {
+            color: Theme.surface
+            border.color: Theme.error
+            border.width: 1
+            radius: Theme.cornerRadiusMedium
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 14
+            anchors.fill: parent
+            anchors.margins: 18
+
+            RowLayout {
+                spacing: 12
+                Layout.fillWidth: true
+                VectorIcon {
+                    name: "trash"
+                    width: 24
+                    height: 24
+                    color: Theme.error
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    Text {
+                        text: deleteConfirmDialog.tracksToDelete.length > 1
+                            ? ("Delete " + deleteConfirmDialog.tracksToDelete.length + " Files from Disk?")
+                            : "Delete Audio File from Disk?"
+                        font.pixelSize: Theme.fontSizeLarge
+                        font.bold: true
+                        color: Theme.textPrimary
+                    }
+                    Text {
+                        text: "This will permanently delete the selected audio file(s) from your storage device and library database. This action CANNOT be undone."
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.textMuted
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(120, Math.max(36, deleteConfirmDialog.tracksToDelete.length * 24 + 8))
+                color: Theme.surfaceElevated
+                border.color: Theme.panelBorder
+                border.width: 1
+                radius: Theme.cornerRadiusSmall
+                clip: true
+
+                ListView {
+                    anchors.fill: parent
+                    anchors.margins: 6
+                    model: deleteConfirmDialog.tracksToDelete
+                    ScrollBar.vertical: ScrollBar {}
+                    delegate: Text {
+                        width: parent.width
+                        text: (modelData.artist ? (modelData.artist + " - ") : "") + (modelData.title || modelData.filePath || "")
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.textSecondary
+                        elide: Text.ElideMiddle
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+
+                Button {
+                    text: "Cancel"
+                    onClicked: deleteConfirmDialog.close()
+                }
+
+                Button {
+                    contentItem: Text {
+                        text: "Delete Permanently"
+                        color: "#FFFFFF"
+                        font.bold: true
+                        font.pixelSize: Theme.fontSizeSmall
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        color: Theme.error
+                        radius: Theme.cornerRadiusSmall
+                    }
+                    onClicked: {
+                        var ids = [];
+                        for (var i = 0; i < deleteConfirmDialog.tracksToDelete.length; ++i) {
+                            if (deleteConfirmDialog.tracksToDelete[i].id) {
+                                ids.push(deleteConfirmDialog.tracksToDelete[i].id);
+                            }
+                        }
+                        deleteConfirmDialog.close();
+                        if (ids.length > 0) {
+                            bridge.deleteFilesFromDisk(ids);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     ContextMenu {
         id: trackContextMenu
         menuType: "track"
@@ -216,14 +342,16 @@ ApplicationWindow {
         onViewAlbumRequested: (album, artist) => {
             switchToExpandedView(album, artist);
         }
-        onEditTagsRequested: (track) => {
-            var sel = bridge.trackModel.getSelectedTracks();
-            if (sel.length > 1) {
-                tagEditorDialog.targetTracks = sel;
-                tagEditorDialog.targetTrack = sel[0];
-            } else {
+        onEditTagsRequested: (tracks) => {
+            if (tracks && tracks.length > 1) {
+                tagEditorDialog.targetTracks = tracks;
+                tagEditorDialog.targetTrack = tracks[0];
+            } else if (tracks && tracks.length === 1) {
                 tagEditorDialog.targetTracks = [];
-                tagEditorDialog.targetTrack = track;
+                tagEditorDialog.targetTrack = tracks[0];
+            } else if (trackContextMenu.targetTrack) {
+                tagEditorDialog.targetTracks = [];
+                tagEditorDialog.targetTrack = trackContextMenu.targetTrack;
             }
             tagEditorDialog.open();
         }
@@ -236,11 +364,36 @@ ApplicationWindow {
                 bridge.deleteSelectedTracks(ids);
             }
         }
+        onDeleteFilesFromDiskRequested: (tracks) => {
+            deleteConfirmDialog.tracksToDelete = tracks;
+            deleteConfirmDialog.open();
+        }
+        onNewPlaylistRequested: {
+            newPlaylistDialog.isSmart = false;
+            newPlaylistDialog.open();
+        }
+        onPlaylistTracksChanged: {
+            if (activeNavSection === 5 && activePlaylistName.length > 0) {
+                bridge.openPlaylist(activePlaylistName);
+            }
+        }
     }
 
     ContextMenu {
         id: explorerContextMenu
         menuType: "explorer"
+    }
+
+    ContextMenu {
+        id: columnHeaderContextMenu
+        menuType: "header"
+    }
+
+    ContextMenu {
+        id: viewportContextMenu
+        menuType: "viewport"
+        onOpenAudioFilesRequested: openAudioFileDialog.open()
+        onOpenAudioFolderRequested: openMusicFolderDialog.open()
     }
 
     // Keyboard shortcuts - Playback Transport
@@ -306,6 +459,16 @@ ApplicationWindow {
                 tagEditorDialog.open();
             }
         }
+    }
+    Shortcut {
+        sequence: "Return"
+        enabled: !searchTextInput.activeFocus && !tagEditorDialog.visible && !newPlaylistDialog.visible && !preferencesDialog.visible && !diagnosticsDialog.visible && !shortcutsDialog.visible && !aboutDialog.visible && !sleepTimerDialog.visible && !openUrlDialog.visible && !deleteConfirmDialog.visible
+        onActivated: playSelectedNow()
+    }
+    Shortcut {
+        sequence: "Enter"
+        enabled: !searchTextInput.activeFocus && !tagEditorDialog.visible && !newPlaylistDialog.visible && !preferencesDialog.visible && !diagnosticsDialog.visible && !shortcutsDialog.visible && !aboutDialog.visible && !sleepTimerDialog.visible && !openUrlDialog.visible && !deleteConfirmDialog.visible
+        onActivated: playSelectedNow()
     }
     Shortcut {
         sequence: "Delete"
@@ -1557,6 +1720,7 @@ ApplicationWindow {
                                         onClicked: {
                                             activeNavSection = modelData.nav;
                                             mainViewMode = modelData.mode;
+                                            activePlaylistName = "";
                                             if (modelData.nav === 2 || modelData.nav === 3) {
                                                 showColumnBrowser = true;
                                             } else {
@@ -1598,8 +1762,50 @@ ApplicationWindow {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         activeNavSection = 4;
+                                        activePlaylistName = "";
                                         rightPanelTab = 1;
                                         showRightPanel = true;
+                                    }
+                                }
+                            }
+
+                            Repeater {
+                                model: bridge.availablePlaylists
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 26
+                                    color: (activeNavSection === 5 && activePlaylistName === modelData) ? Theme.selection : (plItemMouse.containsMouse ? Theme.surfaceElevated : "transparent")
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 16
+                                        anchors.rightMargin: 10
+                                        spacing: 8
+                                        VectorIcon {
+                                            name: "playlist"
+                                            width: 11
+                                            height: 11
+                                            color: (activeNavSection === 5 && activePlaylistName === modelData) ? Theme.accent : Theme.textMuted
+                                        }
+                                        Text {
+                                            text: modelData
+                                            font.pixelSize: 11
+                                            color: (activeNavSection === 5 && activePlaylistName === modelData) ? Theme.textPrimary : Theme.textSecondary
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+                                    MouseArea {
+                                        id: plItemMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            activeNavSection = 5;
+                                            activePlaylistName = modelData;
+                                            mainViewMode = 1;
+                                            bridge.openPlaylist(modelData);
+                                        }
                                     }
                                 }
                             }
@@ -2049,6 +2255,70 @@ ApplicationWindow {
                             anchors.fill: parent
                             spacing: 0
 
+                            component TableHeaderCell: Item {
+                                id: cellRoot
+                                property string colKey: ""
+                                property string colTitle: ""
+                                property string headerText: ""
+                                property bool isFillWidth: false
+
+                                visible: bridge.isColumnVisible(colKey)
+                                Layout.preferredWidth: bridge.getColumnWidth(colKey)
+                                Layout.minimumWidth: isFillWidth ? 100 : 30
+                                Layout.fillWidth: isFillWidth
+                                Layout.fillHeight: true
+                                clip: true
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: hCellMouse.containsMouse ? Theme.surfaceHighlight : "transparent"
+                                    radius: 2
+                                }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 4
+                                    anchors.rightMargin: 4
+                                    spacing: 4
+
+                                    Text {
+                                        text: cellRoot.headerText
+                                        font.pixelSize: 9
+                                        font.bold: true
+                                        color: (bridge.trackModel.sortColumn === cellRoot.colKey) ? Theme.accent : Theme.textMuted
+                                        elide: Text.ElideRight
+                                        verticalAlignment: Text.AlignVCenter
+                                        Layout.fillWidth: true
+                                    }
+
+                                    Text {
+                                        visible: bridge.trackModel.sortColumn === cellRoot.colKey
+                                        text: bridge.trackModel.sortAscending ? "▲" : "▼"
+                                        font.pixelSize: 8
+                                        color: Theme.accent
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: hCellMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    onClicked: (mouse) => {
+                                        if (mouse.button === Qt.RightButton) {
+                                            columnHeaderContextMenu.targetColumnKey = cellRoot.colKey;
+                                            columnHeaderContextMenu.targetColumnTitle = cellRoot.colTitle;
+                                            columnHeaderContextMenu.popup();
+                                        } else {
+                                            bridge.trackModel.toggleSort(cellRoot.colKey);
+                                        }
+                                    }
+                                    onDoubleClicked: bridge.autoSizeColumn(cellRoot.colKey)
+                                }
+                            }
+
                             // Table Header Row
                             Rectangle {
                                 Layout.fillWidth: true
@@ -2057,22 +2327,41 @@ ApplicationWindow {
                                 border.color: Theme.panelBorder
                                 border.width: 1
 
+                                MouseArea {
+                                    anchors.fill: parent
+                                    z: -1
+                                    acceptedButtons: Qt.RightButton
+                                    onClicked: {
+                                        columnHeaderContextMenu.targetColumnKey = "";
+                                        columnHeaderContextMenu.targetColumnTitle = "";
+                                        columnHeaderContextMenu.popup();
+                                    }
+                                }
+
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: 10
                                     anchors.rightMargin: 10
                                     spacing: 8
 
-                                    Item { Layout.preferredWidth: 28; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "#"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
-                                    Item { Layout.preferredWidth: 16; Layout.fillHeight: true; clip: true }
-                                    Item { Layout.fillWidth: true; Layout.preferredWidth: 200; Layout.minimumWidth: 100; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "TITLE"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
-                                    Item { Layout.preferredWidth: 130; Layout.minimumWidth: 70; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "ARTIST"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
-                                    Item { Layout.preferredWidth: 130; Layout.minimumWidth: 70; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "ALBUM"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
-                                    Item { Layout.preferredWidth: 90; Layout.minimumWidth: 50; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "GENRE"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
-                                    Item { Layout.preferredWidth: 42; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "YEAR"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
-                                    Item { Layout.preferredWidth: 72; Layout.minimumWidth: 46; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "FORMAT"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
-                                    Item { Layout.preferredWidth: 62; Layout.minimumWidth: 40; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "BITRATE"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
-                                    Item { Layout.preferredWidth: 42; Layout.fillHeight: true; clip: true; Text { anchors.verticalCenter: parent.verticalCenter; text: "TIME"; font.pixelSize: 9; font.bold: true; color: Theme.textMuted } }
+                                    TableHeaderCell { colKey: "trackNumber"; colTitle: "Track #"; headerText: "#" }
+                                    Item { Layout.preferredWidth: 16; Layout.fillHeight: true }
+                                    TableHeaderCell { colKey: "title"; colTitle: "Title"; headerText: "TITLE"; isFillWidth: true }
+                                    TableHeaderCell { colKey: "artist"; colTitle: "Artist"; headerText: "ARTIST" }
+                                    TableHeaderCell { colKey: "album"; colTitle: "Album"; headerText: "ALBUM" }
+                                    TableHeaderCell { colKey: "albumArtist"; colTitle: "Album Artist"; headerText: "ALBUM ARTIST" }
+                                    TableHeaderCell { colKey: "genre"; colTitle: "Genre"; headerText: "GENRE" }
+                                    TableHeaderCell { colKey: "year"; colTitle: "Year"; headerText: "YEAR" }
+                                    TableHeaderCell { colKey: "codec"; colTitle: "Format / Codec"; headerText: "FORMAT" }
+                                    TableHeaderCell { colKey: "bitrate"; colTitle: "Bitrate"; headerText: "BITRATE" }
+                                    TableHeaderCell { colKey: "sampleRate"; colTitle: "Sample Rate"; headerText: "SAMPLE RATE" }
+                                    TableHeaderCell { colKey: "bitDepth"; colTitle: "Bit Depth"; headerText: "BIT DEPTH" }
+                                    TableHeaderCell { colKey: "playCount"; colTitle: "Play Count"; headerText: "PLAYS" }
+                                    TableHeaderCell { colKey: "rating"; colTitle: "Rating"; headerText: "RATING" }
+                                    TableHeaderCell { colKey: "dateAdded"; colTitle: "Date Added"; headerText: "DATE ADDED" }
+                                    TableHeaderCell { colKey: "filePath"; colTitle: "File Path"; headerText: "FILE PATH" }
+                                    TableHeaderCell { colKey: "fileSize"; colTitle: "File Size"; headerText: "SIZE" }
+                                    TableHeaderCell { colKey: "duration"; colTitle: "Duration"; headerText: "TIME" }
                                 }
                             }
 
@@ -2088,6 +2377,20 @@ ApplicationWindow {
                                     model: bridge.trackModel
                                     clip: true
 
+                                    MouseArea {
+                                        id: emptyViewportMouse
+                                        anchors.fill: parent
+                                        z: -1
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        onClicked: (mouse) => {
+                                            if (mouse.button === Qt.RightButton) {
+                                                viewportContextMenu.popup();
+                                            } else {
+                                                bridge.trackModel.clearSelection();
+                                            }
+                                        }
+                                    }
+
                                     delegate: Rectangle {
                                         width: trackTableListView.width
                                         height: 25
@@ -2099,9 +2402,12 @@ ApplicationWindow {
                                             anchors.rightMargin: 10
                                             spacing: 8
 
+                                            // 1. Track Number
                                             Item {
-                                                Layout.preferredWidth: 28
+                                                visible: bridge.isColumnVisible("trackNumber")
+                                                Layout.preferredWidth: bridge.getColumnWidth("trackNumber")
                                                 Layout.fillHeight: true
+                                                clip: true
                                                 Text {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     text: model.trackNumber > 0 ? model.trackNumber : (index + 1)
@@ -2110,6 +2416,7 @@ ApplicationWindow {
                                                 }
                                             }
 
+                                            // 2. Play/Volume Status Icon
                                             Item {
                                                 Layout.preferredWidth: 16
                                                 Layout.fillHeight: true
@@ -2123,9 +2430,11 @@ ApplicationWindow {
                                                 }
                                             }
 
+                                            // 3. Title
                                             Item {
+                                                visible: bridge.isColumnVisible("title")
                                                 Layout.fillWidth: true
-                                                Layout.preferredWidth: 200
+                                                Layout.preferredWidth: bridge.getColumnWidth("title")
                                                 Layout.minimumWidth: 100
                                                 Layout.fillHeight: true
                                                 clip: true
@@ -2141,8 +2450,10 @@ ApplicationWindow {
                                                 }
                                             }
 
+                                            // 4. Artist
                                             Item {
-                                                Layout.preferredWidth: 130
+                                                visible: bridge.isColumnVisible("artist")
+                                                Layout.preferredWidth: bridge.getColumnWidth("artist")
                                                 Layout.minimumWidth: 70
                                                 Layout.fillHeight: true
                                                 clip: true
@@ -2157,8 +2468,10 @@ ApplicationWindow {
                                                 }
                                             }
 
+                                            // 5. Album
                                             Item {
-                                                Layout.preferredWidth: 130
+                                                visible: bridge.isColumnVisible("album")
+                                                Layout.preferredWidth: bridge.getColumnWidth("album")
                                                 Layout.minimumWidth: 70
                                                 Layout.fillHeight: true
                                                 clip: true
@@ -2186,8 +2499,28 @@ ApplicationWindow {
                                                 }
                                             }
 
+                                            // 6. Album Artist
                                             Item {
-                                                Layout.preferredWidth: 90
+                                                visible: bridge.isColumnVisible("albumArtist")
+                                                Layout.preferredWidth: bridge.getColumnWidth("albumArtist")
+                                                Layout.minimumWidth: 70
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    text: model.albumArtist || model.artist
+                                                    font.pixelSize: 11
+                                                    color: Theme.textMuted
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            // 7. Genre
+                                            Item {
+                                                visible: bridge.isColumnVisible("genre")
+                                                Layout.preferredWidth: bridge.getColumnWidth("genre")
                                                 Layout.minimumWidth: 50
                                                 Layout.fillHeight: true
                                                 clip: true
@@ -2202,8 +2535,11 @@ ApplicationWindow {
                                                 }
                                             }
 
+                                            // 8. Year
                                             Item {
-                                                Layout.preferredWidth: 42
+                                                visible: bridge.isColumnVisible("year")
+                                                Layout.preferredWidth: bridge.getColumnWidth("year")
+                                                Layout.minimumWidth: 36
                                                 Layout.fillHeight: true
                                                 clip: true
                                                 Text {
@@ -2214,12 +2550,13 @@ ApplicationWindow {
                                                 }
                                             }
 
+                                            // 9. Format / Codec
                                             Item {
-                                                Layout.preferredWidth: 72
+                                                visible: bridge.isColumnVisible("codec")
+                                                Layout.preferredWidth: bridge.getColumnWidth("codec")
                                                 Layout.minimumWidth: 46
                                                 Layout.fillHeight: true
                                                 clip: true
-
                                                 Text {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     text: model.codec + (model.bitDepth > 16 ? " " + model.bitDepth + "b" : "")
@@ -2230,8 +2567,10 @@ ApplicationWindow {
                                                 }
                                             }
 
+                                            // 10. Bitrate
                                             Item {
-                                                Layout.preferredWidth: 62
+                                                visible: bridge.isColumnVisible("bitrate")
+                                                Layout.preferredWidth: bridge.getColumnWidth("bitrate")
                                                 Layout.minimumWidth: 40
                                                 Layout.fillHeight: true
                                                 clip: true
@@ -2244,8 +2583,123 @@ ApplicationWindow {
                                                 }
                                             }
 
+                                            // 11. Sample Rate
                                             Item {
-                                                Layout.preferredWidth: 42
+                                                visible: bridge.isColumnVisible("sampleRate")
+                                                Layout.preferredWidth: bridge.getColumnWidth("sampleRate")
+                                                Layout.minimumWidth: 50
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: model.sampleRate > 0 ? ((model.sampleRate / 1000) + " kHz") : ""
+                                                    font.pixelSize: 10
+                                                    color: Theme.textMuted
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            // 12. Bit Depth
+                                            Item {
+                                                visible: bridge.isColumnVisible("bitDepth")
+                                                Layout.preferredWidth: bridge.getColumnWidth("bitDepth")
+                                                Layout.minimumWidth: 40
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: model.bitDepth > 0 ? (model.bitDepth + "-bit") : ""
+                                                    font.pixelSize: 10
+                                                    color: Theme.textMuted
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            // 13. Play Count
+                                            Item {
+                                                visible: bridge.isColumnVisible("playCount")
+                                                Layout.preferredWidth: bridge.getColumnWidth("playCount")
+                                                Layout.minimumWidth: 36
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: model.playCount > 0 ? model.playCount : ""
+                                                    font.pixelSize: 10
+                                                    color: Theme.textMuted
+                                                }
+                                            }
+
+                                            // 14. Rating
+                                            Item {
+                                                visible: bridge.isColumnVisible("rating")
+                                                Layout.preferredWidth: bridge.getColumnWidth("rating")
+                                                Layout.minimumWidth: 50
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: model.rating > 0 ? ("★".repeat(model.rating) + "☆".repeat(5 - model.rating)) : ""
+                                                    font.pixelSize: 10
+                                                    color: Theme.accent
+                                                }
+                                            }
+
+                                            // 15. Date Added
+                                            Item {
+                                                visible: bridge.isColumnVisible("dateAdded")
+                                                Layout.preferredWidth: bridge.getColumnWidth("dateAdded")
+                                                Layout.minimumWidth: 60
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: model.dateAddedFormatted || ""
+                                                    font.pixelSize: 10
+                                                    color: Theme.textMuted
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            // 16. File Path
+                                            Item {
+                                                visible: bridge.isColumnVisible("filePath")
+                                                Layout.preferredWidth: bridge.getColumnWidth("filePath")
+                                                Layout.minimumWidth: 80
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    text: model.filePath || ""
+                                                    font.pixelSize: 10
+                                                    color: Theme.textMuted
+                                                    elide: Text.ElideMiddle
+                                                }
+                                            }
+
+                                            // 17. File Size
+                                            Item {
+                                                visible: bridge.isColumnVisible("fileSize")
+                                                Layout.preferredWidth: bridge.getColumnWidth("fileSize")
+                                                Layout.minimumWidth: 40
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: model.fileSizeFormatted || ""
+                                                    font.pixelSize: 10
+                                                    color: Theme.textMuted
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            // 18. Duration
+                                            Item {
+                                                visible: bridge.isColumnVisible("duration")
+                                                Layout.preferredWidth: bridge.getColumnWidth("duration")
+                                                Layout.minimumWidth: 36
                                                 Layout.fillHeight: true
                                                 clip: true
                                                 Text {
@@ -2278,10 +2732,14 @@ ApplicationWindow {
                                                         bridge.trackModel.clearSelection();
                                                         bridge.trackModel.setRowSelected(index, true);
                                                     }
+                                                    var sel = bridge.trackModel.getSelectedTracks();
+                                                    trackContextMenu.targetTracks = sel;
                                                     trackContextMenu.targetTrack = { id: model.id, title: model.title, artist: model.artist, filePath: model.filePath, album: model.album, genre: model.genre, year: model.year, trackNumber: model.trackNumber };
                                                     trackContextMenu.targetFilePath = model.filePath;
                                                     trackContextMenu.targetTitle = model.title;
                                                     trackContextMenu.targetArtist = model.artist;
+                                                    trackContextMenu.isPlaylistView = (activeNavSection === 5);
+                                                    trackContextMenu.currentPlaylistName = activePlaylistName;
                                                     trackContextMenu.popup();
                                                 } else {
                                                     if (mouse.modifiers & Qt.ControlModifier) {
@@ -2832,7 +3290,21 @@ ApplicationWindow {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
+                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
                                             onDoubleClicked: bridge.playTrackFromDetail(index)
+                                            onClicked: (mouse) => {
+                                                if (mouse.button === Qt.RightButton) {
+                                                    var trk = { id: model.id, title: model.title, artist: model.artist, filePath: model.filePath, album: model.album, genre: model.genre, year: model.year, trackNumber: model.trackNumber };
+                                                    trackContextMenu.targetTracks = [trk];
+                                                    trackContextMenu.targetTrack = trk;
+                                                    trackContextMenu.targetFilePath = model.filePath;
+                                                    trackContextMenu.targetTitle = model.title;
+                                                    trackContextMenu.targetArtist = model.artist;
+                                                    trackContextMenu.isPlaylistView = false;
+                                                    trackContextMenu.currentPlaylistName = "";
+                                                    trackContextMenu.popup();
+                                                }
+                                            }
                                         }
                                     }
                                 }

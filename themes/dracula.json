@@ -1,0 +1,43 @@
+{
+  "$schema": "https://parakeet-audio.org/schemas/theme-v1.json",
+  "meta": {
+    "id": "dracula",
+    "name": "Dracula",
+    "author": "Parakeet Community",
+    "version": "1.0.0",
+    "apiVersion": "0.1-unstable",
+    "description": "High-contrast dark theme featuring vibrant purple and cyan accents"
+  },
+  "colors": {
+    "background": "#282a36",
+    "surface": "#21222c",
+    "surfaceElevated": "#343746",
+    "panelBorder": "#44475a",
+    "accent": "#bd93f9",
+    "accentHover": "#ff79c6",
+    "textPrimary": "#f8f8f2",
+    "textSecondary": "#e2e2dc",
+    "textMuted": "#6272a4",
+    "selection": "#44475a",
+    "error": "#ff5555",
+    "warning": "#ffb86c",
+    "success": "#50fa7b"
+  },
+  "typography": {
+    "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    "fontSizeSmall": 9,
+    "fontSizeBase": 11,
+    "fontSizeLarge": 14,
+    "fontSizeTitle": 18,
+    "fontWeightScale": 1.0,
+    "lineHeightScale": 1.2
+  },
+  "metrics": {
+    "spacingSmall": 4,
+    "spacingMedium": 8,
+    "spacingLarge": 16,
+    "cornerRadiusSmall": 3,
+    "cornerRadiusMedium": 5,
+    "panelPadding": 10
+  }
+}

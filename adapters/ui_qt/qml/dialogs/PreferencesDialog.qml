@@ -886,13 +886,23 @@ Dialog {
                         Repeater {
                             model: bridge.theme.availableThemes
 
-                            delegate: Rectangle {
+                                delegate: Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 110
                                 radius: Theme.cornerRadiusSmall
                                 color: bridge.theme.themeId === modelData.id ? Theme.selection : (themeCardMouse.containsMouse ? Theme.surfaceElevated : Theme.background)
                                 border.color: bridge.theme.themeId === modelData.id ? Theme.accent : Theme.panelBorder
                                 border.width: bridge.theme.themeId === modelData.id ? 2 : 1
+
+                                MouseArea {
+                                    id: themeCardMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        bridge.theme.themeId = modelData.id;
+                                    }
+                                }
 
                                 ColumnLayout {
                                     anchors.fill: parent
@@ -907,11 +917,51 @@ Dialog {
                                             font.bold: true
                                             color: Theme.textPrimary
                                         }
+                                        Rectangle {
+                                            visible: !modelData.isBuiltIn
+                                            color: Theme.surfaceElevated
+                                            border.color: Theme.accent
+                                            border.width: 1
+                                            radius: 2
+                                            implicitWidth: communityLabel.implicitWidth + 8
+                                            implicitHeight: communityLabel.implicitHeight + 4
+                                            Text {
+                                                id: communityLabel
+                                                anchors.centerIn: parent
+                                                text: "COMMUNITY"
+                                                font.pixelSize: 8
+                                                font.bold: true
+                                                color: Theme.accent
+                                            }
+                                        }
                                         Item { Layout.fillWidth: true }
                                         Text {
                                             text: "v" + modelData.version
                                             font.pixelSize: Theme.fontSizeSmall - 1
                                             color: Theme.textMuted
+                                        }
+                                        Rectangle {
+                                            visible: !modelData.isBuiltIn && bridge.theme.themeId !== modelData.id
+                                            width: 18
+                                            height: 18
+                                            radius: 2
+                                            color: deleteMouse.containsMouse ? Theme.error : "transparent"
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "×"
+                                                font.pixelSize: 14
+                                                font.bold: true
+                                                color: deleteMouse.containsMouse ? "#ffffff" : Theme.textMuted
+                                            }
+                                            MouseArea {
+                                                id: deleteMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    bridge.theme.deleteTheme(modelData.id);
+                                                }
+                                            }
                                         }
                                     }
 
@@ -959,16 +1009,6 @@ Dialog {
                                             font.bold: true
                                             color: bridge.theme.themeId === modelData.id ? Theme.accent : Theme.textMuted
                                         }
-                                    }
-                                }
-
-                                MouseArea {
-                                    id: themeCardMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        bridge.theme.themeId = modelData.id;
                                     }
                                 }
                             }

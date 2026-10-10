@@ -1,5 +1,6 @@
 #include "ThemeLoader.hpp"
 #include <QColor>
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
@@ -10,6 +11,7 @@
 #include <QJsonValue>
 #include <QStandardPaths>
 #include <QUrl>
+#include <algorithm>
 
 namespace adapters {
 
@@ -21,6 +23,9 @@ ThemeLoader::ThemeLoader(QObject *parent)
 
   setupWatcher();
   refreshAvailableThemes();
+
+  // Load Dark Studio as initial default
+  setThemeId("dark-studio");
 }
 
 QString ThemeLoader::getUserThemesDir() const {
@@ -28,12 +33,59 @@ QString ThemeLoader::getUserThemesDir() const {
          "/themes";
 }
 
+QStringList ThemeLoader::getThemeSearchPaths() const {
+  QStringList paths;
+
+  // 1. User themes directory (highest priority)
+  paths << getUserThemesDir();
+
+  // 2. Application-relative themes directories
+  QString appDir = QCoreApplication::applicationDirPath();
+  if (!appDir.isEmpty()) {
+    paths << appDir + "/themes";
+    paths << appDir + "/../share/parakeet/themes";
+    paths << appDir + "/../../themes"; // dev build location relative to build/app
+  }
+
+  // 3. Current working directory themes (development)
+  paths << QDir::currentPath() + "/themes";
+
+  // 4. Standard XDG / system AppData locations
+  const auto stdLocations =
+      QStandardPaths::standardLocations(QStandardPaths::AppDataLocation);
+  for (const auto &loc : stdLocations) {
+    QString p = loc + "/themes";
+    if (!paths.contains(p)) {
+      paths << p;
+    }
+  }
+
+  // 5. Qt embedded resources (fail-safe fallback)
+  paths << ":/themes";
+
+  // Remove duplicates while preserving priority order
+  QStringList uniquePaths;
+  for (const auto &p : paths) {
+    if (!uniquePaths.contains(p)) {
+      uniquePaths << p;
+    }
+  }
+  return uniquePaths;
+}
+
+QStringList ThemeLoader::themeSearchPaths() const {
+  return getThemeSearchPaths();
+}
+
 void ThemeLoader::setupWatcher() {
   connect(&m_watcher, &QFileSystemWatcher::fileChanged, this,
           [this](const QString &path) {
             qDebug() << "[ThemeLoader] Hot-reloading theme file:" << path;
-            // Re-read file upon modification
-            loadThemeFromFile(path);
+            if (path == m_activeThemeFilePath) {
+              loadThemeFromFile(path);
+            } else {
+              refreshAvailableThemes();
+            }
           });
 
   connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this,
@@ -45,15 +97,19 @@ void ThemeLoader::setupWatcher() {
   QString themesDir = getUserThemesDir();
   if (QDir(themesDir).exists()) {
     m_watcher.addPath(themesDir);
+    m_watchedDirectories.append(themesDir);
   }
 }
 
 void ThemeLoader::watchActiveFile(const QString &filePath) {
-  if (!m_activeThemeFilePath.isEmpty()) {
+  if (!m_activeThemeFilePath.isEmpty() &&
+      m_watcher.files().contains(m_activeThemeFilePath)) {
     m_watcher.removePath(m_activeThemeFilePath);
   }
   m_activeThemeFilePath = filePath;
   if (!m_activeThemeFilePath.isEmpty() &&
+      !m_activeThemeFilePath.startsWith(":") &&
+      !m_activeThemeFilePath.startsWith("qrc:") &&
       QFile::exists(m_activeThemeFilePath)) {
     m_watcher.addPath(m_activeThemeFilePath);
   }
@@ -343,22 +399,21 @@ bool ThemeLoader::loadThemeFromFile(const QString &filePath) {
 }
 
 void ThemeLoader::setThemeId(const QString &id) {
-  if (id == "dark-studio") {
-    m_tokens = getDefaultDarkStudioTheme();
-    watchActiveFile("");
+  // If found in dynamic theme registry, activate it
+  if (m_themeRegistry.contains(id)) {
+    const auto &entry = m_themeRegistry[id];
+    m_tokens = entry.tokens;
+    if (!entry.filePath.isEmpty() && !entry.filePath.startsWith(":")) {
+      watchActiveFile(entry.filePath);
+    } else {
+      watchActiveFile("");
+    }
     emit themeChanged();
     return;
   }
-  if (id == "nord-audiophile") {
-    m_tokens = getBuiltInNordTheme();
-    watchActiveFile("");
-    emit themeChanged();
-    return;
-  }
-  if (id == "solarized-dark") {
-    m_tokens = getBuiltInSolarizedDarkTheme();
-    watchActiveFile("");
-    emit themeChanged();
+
+  // Check if id is an explicit file path on disk
+  if (QFile::exists(id) && loadThemeFromFile(id)) {
     return;
   }
 
@@ -370,11 +425,21 @@ void ThemeLoader::setThemeId(const QString &id) {
     }
   }
 
-  // Fall back to default theme
+  // Fall back to default dark studio
   qWarning() << "[ThemeLoader] Theme id not found or invalid:" << id
              << "- falling back to default.";
-  m_tokens = getDefaultDarkStudioTheme();
-  watchActiveFile("");
+  if (m_themeRegistry.contains("dark-studio")) {
+    const auto &entry = m_themeRegistry["dark-studio"];
+    m_tokens = entry.tokens;
+    if (!entry.filePath.isEmpty() && !entry.filePath.startsWith(":")) {
+      watchActiveFile(entry.filePath);
+    } else {
+      watchActiveFile("");
+    }
+  } else {
+    m_tokens = getDefaultDarkStudioTheme();
+    watchActiveFile("");
+  }
   emit themeChanged();
 }
 
@@ -437,7 +502,10 @@ bool ThemeLoader::installTheme(const QString &sourceFilePath) {
     return false;
   }
 
-  QString destPath = getUserThemesDir() + "/" + srcInfo.fileName();
+  ThemeTokens tokens = parseThemeJson(doc.object());
+  QString targetFileName =
+      tokens.id.isEmpty() ? srcInfo.fileName() : (tokens.id + ".json");
+  QString destPath = getUserThemesDir() + "/" + targetFileName;
   if (QFile::exists(destPath)) {
     QFile::remove(destPath);
   }
@@ -448,68 +516,259 @@ bool ThemeLoader::installTheme(const QString &sourceFilePath) {
   }
 
   refreshAvailableThemes();
-  loadThemeFromFile(destPath);
+  setThemeId(tokens.id.isEmpty() ? QFileInfo(targetFileName).baseName()
+                                 : tokens.id);
+  return true;
+}
+
+bool ThemeLoader::deleteTheme(const QString &id) {
+  if (!m_themeRegistry.contains(id)) {
+    return false;
+  }
+  const auto &entry = m_themeRegistry[id];
+  if (entry.isBuiltIn || !entry.isUserTheme) {
+    qWarning() << "[ThemeLoader] Cannot delete built-in theme:" << id;
+    emit themeLoadError("Cannot delete built-in theme");
+    return false;
+  }
+
+  if (!entry.filePath.isEmpty() && QFile::exists(entry.filePath)) {
+    if (!QFile::remove(entry.filePath)) {
+      emit themeLoadError("Failed to remove theme file");
+      return false;
+    }
+  }
+
+  bool wasActive = (m_tokens.id == id);
+  refreshAvailableThemes();
+
+  if (wasActive) {
+    setThemeId("dark-studio");
+  }
+
+  return true;
+}
+
+bool ThemeLoader::exportTheme(const QString &id,
+                              const QString &destFilePath) {
+  if (!m_themeRegistry.contains(id)) {
+    emit themeLoadError("Theme not found for export");
+    return false;
+  }
+
+  const auto &entry = m_themeRegistry[id];
+  QFile outFile(destFilePath);
+  if (!outFile.open(QIODevice::WriteOnly | QIODevice::Truncate |
+                    QIODevice::Text)) {
+    emit themeLoadError(
+        QString("Cannot write to destination: %1").arg(destFilePath));
+    return false;
+  }
+
+  // If source file exists on disk, copy raw content
+  if (!entry.filePath.isEmpty() && QFile::exists(entry.filePath)) {
+    QFile inFile(entry.filePath);
+    if (inFile.open(QIODevice::ReadOnly)) {
+      outFile.write(inFile.readAll());
+      return true;
+    }
+  }
+
+  // Otherwise construct JSON document from tokens
+  QJsonObject root;
+  QJsonObject meta;
+  meta["id"] = entry.tokens.id;
+  meta["name"] = entry.tokens.name;
+  meta["author"] = entry.tokens.author;
+  meta["version"] = entry.tokens.version;
+  meta["apiVersion"] = entry.tokens.apiVersion;
+  meta["description"] = entry.tokens.description;
+  root["meta"] = meta;
+
+  QJsonObject colors;
+  colors["background"] = entry.tokens.background;
+  colors["surface"] = entry.tokens.surface;
+  colors["surfaceElevated"] = entry.tokens.surfaceElevated;
+  colors["panelBorder"] = entry.tokens.panelBorder;
+  colors["accent"] = entry.tokens.accent;
+  colors["accentHover"] = entry.tokens.accentHover;
+  colors["textPrimary"] = entry.tokens.textPrimary;
+  colors["textSecondary"] = entry.tokens.textSecondary;
+  colors["textMuted"] = entry.tokens.textMuted;
+  colors["selection"] = entry.tokens.selection;
+  colors["error"] = entry.tokens.error;
+  colors["warning"] = entry.tokens.warning;
+  colors["success"] = entry.tokens.success;
+  root["colors"] = colors;
+
+  QJsonObject typo;
+  typo["fontFamily"] = entry.tokens.fontFamily;
+  typo["fontSizeSmall"] = entry.tokens.fontSizeSmall;
+  typo["fontSizeBase"] = entry.tokens.fontSizeBase;
+  typo["fontSizeLarge"] = entry.tokens.fontSizeLarge;
+  typo["fontSizeTitle"] = entry.tokens.fontSizeTitle;
+  typo["fontWeightScale"] = entry.tokens.fontWeightScale;
+  typo["lineHeightScale"] = entry.tokens.lineHeightScale;
+  root["typography"] = typo;
+
+  QJsonObject metrics;
+  metrics["spacingSmall"] = entry.tokens.spacingSmall;
+  metrics["spacingMedium"] = entry.tokens.spacingMedium;
+  metrics["spacingLarge"] = entry.tokens.spacingLarge;
+  metrics["cornerRadiusSmall"] = entry.tokens.cornerRadiusSmall;
+  metrics["cornerRadiusMedium"] = entry.tokens.cornerRadiusMedium;
+  metrics["panelPadding"] = entry.tokens.panelPadding;
+  root["metrics"] = metrics;
+
+  QJsonDocument doc(root);
+  outFile.write(doc.toJson(QJsonDocument::Indented));
   return true;
 }
 
 void ThemeLoader::openThemesFolder() {
+  QDir().mkpath(getUserThemesDir());
   QDesktopServices::openUrl(QUrl::fromLocalFile(getUserThemesDir()));
 }
 
 void ThemeLoader::refreshAvailableThemes() {
   m_availableThemes.clear();
+  m_themeRegistry.clear();
 
-  auto addThemeEntry = [this](const ThemeTokens &t, const QString &path = "") {
-    QVariantMap map;
-    map["id"] = t.id;
-    map["name"] = t.name;
-    map["author"] = t.author;
-    map["version"] = t.version;
-    map["description"] = t.description;
-    map["isBuiltIn"] = path.isEmpty();
-    map["filePath"] = path;
+  QString userDir = getUserThemesDir();
 
-    QVariantMap colors;
-    colors["background"] = t.background;
-    colors["surface"] = t.surface;
-    colors["surfaceElevated"] = t.surfaceElevated;
-    colors["panelBorder"] = t.panelBorder;
-    colors["accent"] = t.accent;
-    colors["textPrimary"] = t.textPrimary;
-    colors["textSecondary"] = t.textSecondary;
-    map["colors"] = colors;
+  // Scan paths in reverse priority order (lowest priority first, highest last)
+  // so that user themes overwrite bundled ones of the same id
+  QStringList searchPaths = getThemeSearchPaths();
+  std::reverse(searchPaths.begin(), searchPaths.end());
 
-    m_availableThemes.append(map);
-  };
+  for (const QString &dirPath : searchPaths) {
+    QDir dir(dirPath);
+    if (!dir.exists()) {
+      continue;
+    }
 
-  // Built-in themes
-  addThemeEntry(getDefaultDarkStudioTheme());
-  addThemeEntry(getBuiltInNordTheme());
-  addThemeEntry(getBuiltInSolarizedDarkTheme());
-
-  // User installed themes
-  QDir dir(getUserThemesDir());
-  QStringList files =
-      dir.entryList(QStringList() << "*.json", QDir::Files, QDir::Name);
-  for (const QString &file : files) {
-    QString fullPath = dir.absoluteFilePath(file);
-    QFile f(fullPath);
-    if (f.open(QIODevice::ReadOnly)) {
-      QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
-      if (doc.isObject()) {
-        QJsonObject obj = doc.object();
-        QString err;
-        if (validateThemeJson(obj, err)) {
-          ThemeTokens t = parseThemeJson(obj, getDefaultDarkStudioTheme());
-          if (t.id.isEmpty())
-            t.id = QFileInfo(file).baseName();
-          addThemeEntry(t, fullPath);
-        }
+    // Watch physical directories on disk for live changes
+    if (!dirPath.startsWith(":") && !dirPath.startsWith("qrc:")) {
+      if (!m_watchedDirectories.contains(dirPath)) {
+        m_watcher.addPath(dirPath);
+        m_watchedDirectories.append(dirPath);
       }
+    }
+
+    QStringList files =
+        dir.entryList(QStringList() << "*.json", QDir::Files, QDir::Name);
+    for (const QString &fileName : files) {
+      QString fullPath = dir.filePath(fileName);
+      QFile file(fullPath);
+      if (!file.open(QIODevice::ReadOnly)) {
+        continue;
+      }
+      QJsonParseError parseErr;
+      QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseErr);
+      if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
+        continue;
+      }
+      QJsonObject obj = doc.object();
+      QString valErr;
+      if (!validateThemeJson(obj, valErr)) {
+        continue;
+      }
+
+      ThemeTokens tokens = parseThemeJson(obj, getDefaultDarkStudioTheme());
+      if (tokens.id.isEmpty()) {
+        tokens.id = QFileInfo(fileName).baseName();
+      }
+
+      bool isUser = (QDir(dirPath) == QDir(userDir));
+      bool isBuiltIn = !isUser;
+
+      ThemeMetadata meta;
+      meta.id = tokens.id;
+      meta.name = tokens.name;
+      meta.author = tokens.author;
+      meta.version = tokens.version;
+      meta.apiVersion = tokens.apiVersion;
+      meta.description = tokens.description;
+      meta.isBuiltIn = isBuiltIn;
+      meta.isUserTheme = isUser;
+      meta.filePath = fullPath;
+      meta.tokens = tokens;
+
+      m_themeRegistry[tokens.id] = meta;
     }
   }
 
+  // Ensure built-in fallbacks exist in registry even if disk/resource scanning found nothing
+  if (!m_themeRegistry.contains("dark-studio")) {
+    ThemeTokens ds = getDefaultDarkStudioTheme();
+    m_themeRegistry["dark-studio"] = ThemeMetadata{
+        ds.id,         ds.name, ds.author, ds.version, ds.apiVersion,
+        ds.description, true,   false,     "",         ds};
+  }
+  if (!m_themeRegistry.contains("nord-audiophile")) {
+    ThemeTokens nord = getBuiltInNordTheme();
+    m_themeRegistry["nord-audiophile"] = ThemeMetadata{
+        nord.id,         nord.name, nord.author, nord.version, nord.apiVersion,
+        nord.description, true,     false,       "",          nord};
+  }
+  if (!m_themeRegistry.contains("solarized-dark")) {
+    ThemeTokens sol = getBuiltInSolarizedDarkTheme();
+    m_themeRegistry["solarized-dark"] = ThemeMetadata{
+        sol.id,         sol.name, sol.author, sol.version, sol.apiVersion,
+        sol.description, true,    false,      "",          sol};
+  }
+
+  // Sort: dark-studio first, then other built-in themes, then user themes alphabetically
+  QList<ThemeMetadata> sortedList = m_themeRegistry.values();
+  std::sort(sortedList.begin(), sortedList.end(),
+            [](const ThemeMetadata &a, const ThemeMetadata &b) {
+              if (a.id == "dark-studio")
+                return true;
+              if (b.id == "dark-studio")
+                return false;
+              if (a.isBuiltIn != b.isBuiltIn)
+                return a.isBuiltIn > b.isBuiltIn;
+              return a.name.localeAwareCompare(b.name) < 0;
+            });
+
+  for (const auto &meta : sortedList) {
+    QVariantMap map;
+    map["id"] = meta.id;
+    map["name"] = meta.name;
+    map["author"] = meta.author;
+    map["version"] = meta.version;
+    map["apiVersion"] = meta.apiVersion;
+    map["description"] = meta.description;
+    map["isBuiltIn"] = meta.isBuiltIn;
+    map["isUserTheme"] = meta.isUserTheme;
+    map["filePath"] = meta.filePath;
+
+    QVariantMap colors;
+    colors["background"] = meta.tokens.background;
+    colors["surface"] = meta.tokens.surface;
+    colors["surfaceElevated"] = meta.tokens.surfaceElevated;
+    colors["panelBorder"] = meta.tokens.panelBorder;
+    colors["accent"] = meta.tokens.accent;
+    colors["accentHover"] = meta.tokens.accentHover;
+    colors["textPrimary"] = meta.tokens.textPrimary;
+    colors["textSecondary"] = meta.tokens.textSecondary;
+    colors["textMuted"] = meta.tokens.textMuted;
+    colors["selection"] = meta.tokens.selection;
+    colors["error"] = meta.tokens.error;
+    colors["warning"] = meta.tokens.warning;
+    colors["success"] = meta.tokens.success;
+    map["colors"] = colors;
+
+    m_availableThemes.append(map);
+  }
+
   emit availableThemesChanged();
+
+  // If active theme exists in registry, reload its tokens (handles live editing)
+  if (!m_tokens.id.isEmpty() && m_themeRegistry.contains(m_tokens.id)) {
+    m_tokens = m_themeRegistry[m_tokens.id].tokens;
+    emit themeChanged();
+  }
 }
 
 } // namespace adapters

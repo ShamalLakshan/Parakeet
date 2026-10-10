@@ -1,0 +1,43 @@
+{
+  "$schema": "https://parakeet-audio.org/schemas/theme-v1.json",
+  "meta": {
+    "id": "solarized-light",
+    "name": "Solarized Light",
+    "author": "Parakeet Community",
+    "version": "1.0.0",
+    "apiVersion": "0.1-unstable",
+    "description": "Clean, warm daytime palette designed for comfortable reading in bright light"
+  },
+  "colors": {
+    "background": "#fdf6e3",
+    "surface": "#eee8d5",
+    "surfaceElevated": "#e4decb",
+    "panelBorder": "#d33682",
+    "accent": "#268bd2",
+    "accentHover": "#2aa198",
+    "textPrimary": "#073642",
+    "textSecondary": "#586e75",
+    "textMuted": "#93a1a1",
+    "selection": "#e4decb",
+    "error": "#dc322f",
+    "warning": "#cb4b16",
+    "success": "#859900"
+  },
+  "typography": {
+    "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    "fontSizeSmall": 9,
+    "fontSizeBase": 11,
+    "fontSizeLarge": 14,
+    "fontSizeTitle": 18,
+    "fontWeightScale": 1.0,
+    "lineHeightScale": 1.2
+  },
+  "metrics": {
+    "spacingSmall": 4,
+    "spacingMedium": 8,
+    "spacingLarge": 16,
+    "cornerRadiusSmall": 3,
+    "cornerRadiusMedium": 6,
+    "panelPadding": 10
+  }
+}
