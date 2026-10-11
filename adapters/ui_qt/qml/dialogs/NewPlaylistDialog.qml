@@ -15,15 +15,27 @@ Dialog {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     property bool isSmart: false
+    property bool isEdit: false
 
     function openSmart() {
+        isEdit = false;
         isSmart = true;
         open();
     }
 
+    function openSmartEdit(name, rules) {
+        isEdit = true;
+        isSmart = true;
+        open();
+        playlistNameInput.text = name;
+        smartCriteriaInput.text = rules;
+    }
+
     onAboutToShow: {
-        playlistNameInput.text = "";
-        smartCriteriaInput.text = "";
+        if (!isEdit) {
+            playlistNameInput.text = "";
+            smartCriteriaInput.text = "";
+        }
         playlistNameInput.forceActiveFocus();
     }
 
@@ -271,10 +283,15 @@ Dialog {
         var name = playlistNameInput.text.trim();
         if (!name) return;
         if (root.isSmart) {
-            bridge.createSmartPlaylist(name, smartCriteriaInput.text.trim());
+            if (root.isEdit) {
+                bridge.updateSmartPlaylistRules(name, smartCriteriaInput.text.trim());
+            } else {
+                bridge.createSmartPlaylist(name, smartCriteriaInput.text.trim());
+            }
         } else {
             bridge.createPlaylist(name);
         }
+        isEdit = false;
         root.close();
     }
 }

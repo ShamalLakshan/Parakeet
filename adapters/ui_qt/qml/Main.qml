@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
+import Qt.labs.platform as Platform
 import "components"
 import "dialogs"
 import "views"
@@ -15,8 +16,10 @@ ApplicationWindow {
     visible: true
     title: "Parakeet Music Player"
     color: Theme.background
+    flags: Qt.Window | (stayOnTop ? Qt.WindowStaysOnTopHint : 0)
 
     // Panel visibility and navigation state
+    property bool stayOnTop: false
     property bool showLeftPanel: true
     property bool showRightPanel: true
     property bool showColumnBrowser: true
@@ -24,6 +27,7 @@ ApplicationWindow {
     property bool showEqualizer: false
     property bool isMiniPlayer: false
     property real normalWidth: 1400
+    property real normalHeight: 840
     property int mainViewMode: 1 // 0: Album Grid, 1: Track Details Table, 2: Album & Tracks View, 3: Listening History
     property int previousViewMode: 0
     property int activeNavSection: 0 // 0: All Tracks, 1: Albums, 2: Artists, 3: Genres, 4: Now Playing
@@ -216,6 +220,100 @@ ApplicationWindow {
         }
     }
 
+    FileDialog {
+        id: exportArtworkDialog
+        title: "Export Album Artwork"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["Image files (*.jpg *.png)", "All files (*)"]
+        property string albumTitle: ""
+        property string albumArtist: ""
+        onAccepted: {
+            bridge.exportAlbumArtwork(albumTitle, albumArtist, selectedFile.toString());
+        }
+    }
+
+    FileDialog {
+        id: exportPlaylistDialog
+        title: "Export Playlist"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["M3U8 Playlist (*.m3u8)", "M3U Playlist (*.m3u)", "All files (*)"]
+        property string playlistName: ""
+        onAccepted: {
+            bridge.exportPlaylistFile(playlistName, selectedFile.toString());
+        }
+    }
+
+    Dialog {
+        id: renamePlaylistDialog
+        title: "Rename Playlist"
+        modal: true
+        focus: true
+        anchors.centerIn: Overlay.overlay
+        width: 380
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        property string oldName: ""
+
+        background: Rectangle {
+            color: Theme.surface
+            border.color: Theme.panelBorder
+            border.width: 1
+            radius: Theme.cornerRadiusMedium
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+            anchors.fill: parent
+            anchors.margins: 16
+
+            Text {
+                text: "Rename Playlist"
+                font.pixelSize: Theme.fontSizeLarge
+                font.bold: true
+                color: Theme.textPrimary
+            }
+
+            TextField {
+                id: renameInput
+                Layout.fillWidth: true
+                placeholderText: "New playlist name"
+                color: Theme.textPrimary
+                background: Rectangle {
+                    color: Theme.surfaceElevated
+                    border.color: renameInput.activeFocus ? Theme.accent : Theme.panelBorder
+                    radius: Theme.cornerRadiusSmall
+                }
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: 8
+
+                Button {
+                    text: "Cancel"
+                    onClicked: renamePlaylistDialog.close()
+                }
+
+                Button {
+                    text: "Rename"
+                    enabled: renameInput.text.trim().length > 0 && renameInput.text.trim() !== renamePlaylistDialog.oldName
+                    onClicked: {
+                        bridge.renamePlaylist(renamePlaylistDialog.oldName, renameInput.text.trim());
+                        if (activePlaylistName === renamePlaylistDialog.oldName) {
+                            activePlaylistName = renameInput.text.trim();
+                        }
+                        renamePlaylistDialog.close();
+                    }
+                }
+            }
+        }
+
+        onAboutToShow: {
+            renameInput.text = oldName;
+            renameInput.forceActiveFocus();
+        }
+    }
+
     Dialog {
         id: deleteConfirmDialog
         title: "Delete File from Disk"
@@ -394,6 +492,182 @@ ApplicationWindow {
         menuType: "viewport"
         onOpenAudioFilesRequested: openAudioFileDialog.open()
         onOpenAudioFolderRequested: openMusicFolderDialog.open()
+    }
+
+    ContextMenu {
+        id: albumContextMenu
+        menuType: "album"
+        onEditTagsRequested: (tracks) => {
+            if (tracks && tracks.length > 0) {
+                tagEditorDialog.targetTracks = tracks;
+                tagEditorDialog.targetTrack = tracks[0];
+                tagEditorDialog.open();
+            }
+        }
+        onExportArtworkRequested: (album, artist) => {
+            exportArtworkDialog.albumTitle = album;
+            exportArtworkDialog.albumArtist = artist;
+            exportArtworkDialog.open();
+        }
+        onNewPlaylistRequested: {
+            newPlaylistDialog.isSmart = false;
+            newPlaylistDialog.isEdit = false;
+            newPlaylistDialog.open();
+        }
+    }
+
+    ContextMenu {
+        id: folderContextMenu
+        menuType: "folder"
+    }
+
+    ContextMenu {
+        id: playlistContextMenu
+        menuType: "playlist"
+        onRenamePlaylistRequested: (plName) => {
+            renamePlaylistDialog.oldName = plName;
+            renamePlaylistDialog.open();
+        }
+        onExportPlaylistRequested: (plName) => {
+            exportPlaylistDialog.playlistName = plName;
+            exportPlaylistDialog.open();
+        }
+        onEditSmartPlaylistRequested: (plName) => {
+            newPlaylistDialog.openSmartEdit(plName, bridge.getSmartPlaylistRules(plName));
+        }
+        onDeletePlaylistRequested: (plName) => {
+            bridge.deletePlaylist(plName);
+            if (activePlaylistName === plName) {
+                activePlaylistName = "";
+            }
+        }
+    }
+
+    ContextMenu {
+        id: seekBarContextMenu
+        menuType: "seekbar"
+    }
+
+    ContextMenu {
+        id: volumeContextMenu
+        menuType: "volume"
+    }
+
+    ContextMenu {
+        id: codecContextMenu
+        menuType: "codec"
+        onShowAudioDiagnosticsRequested: diagnosticsDialog.open()
+        onShowAudioSettingsRequested: {
+            preferencesDialog.openTab(1);
+            preferencesDialog.open();
+        }
+    }
+
+    ContextMenu {
+        id: miniPlayerContextMenu
+        menuType: "miniplayer"
+        stayOnTop: root.stayOnTop
+        currentOpacity: root.opacity
+        onStayOnTopChanged: {
+            root.stayOnTop = miniPlayerContextMenu.stayOnTop;
+        }
+        onToggleMiniPlayerRequested: toggleMiniPlayer()
+        onSetOpacityRequested: (op) => {
+            root.opacity = op;
+        }
+        onCloseMiniPlayerRequested: toggleMiniPlayer()
+    }
+
+    ContextMenu {
+        id: trayContextMenu
+        menuType: "tray"
+        onToggleWindowRequested: {
+            if (root.visible) {
+                root.hide();
+            } else {
+                root.show();
+                root.raise();
+                root.requestActivate();
+            }
+        }
+        onShowPreferencesRequested: {
+            root.show();
+            root.raise();
+            root.requestActivate();
+            preferencesDialog.open();
+        }
+    }
+
+    Platform.SystemTrayIcon {
+        id: systemTrayIcon
+        visible: true
+        tooltip: "Parakeet Music Player"
+        menu: Platform.Menu {
+            Platform.MenuItem {
+                text: bridge.isPlaying ? (bridge.currentTrackTitle + " - " + bridge.currentArtist) : "Parakeet (Stopped)"
+                enabled: false
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: bridge.isPlaying ? "Pause" : "Play"
+                onTriggered: bridge.togglePlayPause()
+            }
+            Platform.MenuItem {
+                text: "Stop"
+                onTriggered: bridge.stop()
+            }
+            Platform.MenuItem {
+                text: "Next Track"
+                onTriggered: bridge.nextTrack()
+            }
+            Platform.MenuItem {
+                text: "Previous Track"
+                onTriggered: bridge.previousTrack()
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: bridge.isMuted ? "Unmute" : "Mute"
+                onTriggered: bridge.toggleMute()
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: root.visible ? "Hide Window" : "Show Window"
+                onTriggered: {
+                    if (root.visible) {
+                        root.hide();
+                    } else {
+                        root.show();
+                        root.raise();
+                        root.requestActivate();
+                    }
+                }
+            }
+            Platform.MenuItem {
+                text: "Preferences..."
+                onTriggered: {
+                    root.show();
+                    root.raise();
+                    root.requestActivate();
+                    preferencesDialog.open();
+                }
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: "Quit Parakeet"
+                onTriggered: Qt.quit()
+            }
+        }
+        onActivated: (reason) => {
+            if (reason === Platform.SystemTrayIcon.Trigger || reason === Platform.SystemTrayIcon.DoubleClick) {
+                if (root.visible) {
+                    root.hide();
+                } else {
+                    root.show();
+                    root.raise();
+                    root.requestActivate();
+                }
+            }
+        }
     }
 
     // Keyboard shortcuts - Playback Transport
@@ -1782,7 +2056,7 @@ ApplicationWindow {
                                         anchors.rightMargin: 10
                                         spacing: 8
                                         VectorIcon {
-                                            name: "playlist"
+                                            name: bridge.isSmartPlaylist(modelData) ? "settings" : "playlist"
                                             width: 11
                                             height: 11
                                             color: (activeNavSection === 5 && activePlaylistName === modelData) ? Theme.accent : Theme.textMuted
@@ -1800,11 +2074,18 @@ ApplicationWindow {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            activeNavSection = 5;
-                                            activePlaylistName = modelData;
-                                            mainViewMode = 1;
-                                            bridge.openPlaylist(modelData);
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        onClicked: (mouse) => {
+                                            if (mouse.button === Qt.RightButton) {
+                                                playlistContextMenu.targetPlaylistName = modelData;
+                                                playlistContextMenu.targetPlaylistIsSmart = bridge.isSmartPlaylist(modelData);
+                                                playlistContextMenu.popup();
+                                            } else {
+                                                activeNavSection = 5;
+                                                activePlaylistName = modelData;
+                                                mainViewMode = 1;
+                                                bridge.openPlaylist(modelData);
+                                            }
                                         }
                                     }
                                 }
@@ -1840,6 +2121,58 @@ ApplicationWindow {
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: folderDialog.open()
+                                }
+                            }
+
+                            Repeater {
+                                model: bridge.monitoredFolders
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 26
+                                    color: folderItemMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 16
+                                        anchors.rightMargin: 10
+                                        spacing: 8
+
+                                        VectorIcon {
+                                            name: "folder"
+                                            width: 11
+                                            height: 11
+                                            color: Theme.textMuted
+                                        }
+
+                                        Text {
+                                            text: {
+                                                var parts = modelData.split("/");
+                                                return (parts.length > 0 && parts[parts.length - 1].length > 0) ? parts[parts.length - 1] : modelData;
+                                            }
+                                            font.pixelSize: 11
+                                            color: Theme.textSecondary
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: folderItemMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        onClicked: (mouse) => {
+                                            if (mouse.button === Qt.RightButton) {
+                                                folderContextMenu.targetFolderPath = modelData;
+                                                folderContextMenu.popup();
+                                            } else {
+                                                bridge.openFolder(modelData, false);
+                                            }
+                                        }
+                                        ToolTip.visible: folderItemMouse.containsMouse
+                                        ToolTip.text: modelData + "\nRight-click for options (Rescan, Reveal, Remove)"
+                                    }
                                 }
                             }
 
@@ -2226,14 +2559,21 @@ ApplicationWindow {
                                                 anchors.fill: parent
                                                 hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    bridge.search(model.title);
+                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                onClicked: (mouse) => {
+                                                    if (mouse.button === Qt.RightButton) {
+                                                        albumContextMenu.targetAlbumTitle = model.title;
+                                                        albumContextMenu.targetAlbumArtist = model.artist;
+                                                        albumContextMenu.popup();
+                                                    } else {
+                                                        bridge.search(model.title);
+                                                    }
                                                 }
                                                 onDoubleClicked: {
                                                     switchToExpandedView(model.title, model.artist);
                                                 }
                                                 ToolTip.visible: albColMouse.containsMouse
-                                                ToolTip.text: "Click to filter table • Double-click to expand album"
+                                                ToolTip.text: "Click to filter • Right-click for album menu • Double-click to expand"
                                             }
                                         }
                                     }
@@ -2867,10 +3207,9 @@ ApplicationWindow {
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     onClicked: (mouse) => {
                                         if (mouse.button === Qt.RightButton) {
-                                            trackContextMenu.targetTitle = model.title;
-                                            trackContextMenu.targetArtist = model.artist;
-                                            trackContextMenu.targetFilePath = "";
-                                            trackContextMenu.popup();
+                                            albumContextMenu.targetAlbumTitle = model.title;
+                                            albumContextMenu.targetAlbumArtist = model.artist;
+                                            albumContextMenu.popup();
                                         } else {
                                             switchToExpandedView(model.title, model.artist);
                                         }
@@ -3065,6 +3404,19 @@ ApplicationWindow {
                                                 anchors.fill: parent
                                                 source: "image://albumart/" + (bridge.selectedAlbumArtHash ? bridge.selectedAlbumArtHash : "default")
                                                 fillMode: Image.PreserveAspectCrop
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                acceptedButtons: Qt.RightButton
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: (mouse) => {
+                                                    if (mouse.button === Qt.RightButton) {
+                                                        albumContextMenu.targetAlbumTitle = bridge.selectedAlbumTitle;
+                                                        albumContextMenu.targetAlbumArtist = bridge.selectedAlbumArtist;
+                                                        albumContextMenu.popup();
+                                                    }
+                                                }
                                             }
                                         }
 
@@ -3956,6 +4308,16 @@ ApplicationWindow {
                             color: Theme.textMuted
                             Layout.preferredWidth: 36
                             horizontalAlignment: Text.AlignRight
+
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.RightButton
+                                onClicked: (mouse) => {
+                                    if (mouse.button === Qt.RightButton) {
+                                        seekBarContextMenu.popup();
+                                    }
+                                }
+                            }
                         }
 
                         // Custom Clean Timeline Slider (Zero gradients!)
@@ -3967,6 +4329,16 @@ ApplicationWindow {
                             value: bridge.positionMs
                             onMoved: {
                                 bridge.seek(value)
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.RightButton
+                                onClicked: (mouse) => {
+                                    if (mouse.button === Qt.RightButton) {
+                                        seekBarContextMenu.popup();
+                                    }
+                                }
                             }
 
                             background: Rectangle {
@@ -3998,10 +4370,25 @@ ApplicationWindow {
                         }
 
                         Text {
-                            text: bridge.durationStr
+                            text: bridge.showRemainingTime ? ("-" + bridge.formatDuration(Math.max(0, bridge.durationMs - bridge.positionMs))) : bridge.durationStr
                             font.pixelSize: 10
                             color: Theme.textMuted
                             Layout.preferredWidth: 36
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                onClicked: (mouse) => {
+                                    if (mouse.button === Qt.RightButton) {
+                                        seekBarContextMenu.popup();
+                                    } else {
+                                        bridge.showRemainingTime = !bridge.showRemainingTime;
+                                    }
+                                }
+                                ToolTip.visible: containsMouse
+                                ToolTip.text: "Click to toggle remaining time • Right-click for options"
+                            }
                         }
                     }
                 }
@@ -4054,13 +4441,60 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
 
-                        Text {
-                            text: bridge.currentAudioSpecs
-                            visible: text.length > 0
-                            font.pixelSize: 9
-                            color: Theme.textMuted
-                            elide: Text.ElideRight
+                        RowLayout {
+                            spacing: 6
                             Layout.fillWidth: true
+
+                            Rectangle {
+                                visible: bridge.currentCodec.length > 0
+                                width: codecBadgeText.implicitWidth + 8
+                                height: 16
+                                radius: 2
+                                color: codecMouse.containsMouse ? Theme.surfaceElevated : Theme.selection
+                                border.color: Theme.panelBorder
+                                border.width: 1
+
+                                Text {
+                                    id: codecBadgeText
+                                    anchors.centerIn: parent
+                                    text: bridge.currentCodec.toUpperCase()
+                                    font.pixelSize: 8
+                                    font.bold: true
+                                    color: Theme.accent
+                                }
+
+                                MouseArea {
+                                    id: codecMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    onClicked: (mouse) => {
+                                        codecContextMenu.popup();
+                                    }
+                                    ToolTip.visible: codecMouse.containsMouse
+                                    ToolTip.text: "Right-click or click for Audio Diagnostics & Settings"
+                                }
+                            }
+
+                            Text {
+                                text: bridge.currentAudioSpecs
+                                visible: text.length > 0
+                                font.pixelSize: 9
+                                color: Theme.textMuted
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.RightButton
+                                    onClicked: (mouse) => {
+                                        if (mouse.button === Qt.RightButton) {
+                                            codecContextMenu.popup();
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -4085,17 +4519,35 @@ ApplicationWindow {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: bridge.toggleMute()
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: (mouse) => {
+                                if (mouse.button === Qt.RightButton) {
+                                    volumeContextMenu.popup();
+                                } else {
+                                    bridge.toggleMute();
+                                }
+                            }
                         }
                     }
 
                     Slider {
                         id: volumeSlider
+                        enabled: !bridge.volumeLocked
                         Layout.preferredWidth: 80
                         from: 0
                         to: 1
                         value: bridge.volume
                         onMoved: bridge.setVolume(value)
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.RightButton
+                            onClicked: (mouse) => {
+                                if (mouse.button === Qt.RightButton) {
+                                    volumeContextMenu.popup();
+                                }
+                            }
+                        }
 
                         background: Rectangle {
                             x: volumeSlider.leftPadding
@@ -4126,10 +4578,23 @@ ApplicationWindow {
                     }
 
                     Text {
-                        text: Math.round(bridge.volume * 100) + "%"
+                        text: bridge.volumeLocked ? "🔒 " + Math.round(bridge.volume * 100) + "%" : (Math.round(bridge.volume * 100) + "%")
                         font.pixelSize: 9
-                        color: Theme.textMuted
-                        Layout.preferredWidth: 26
+                        color: bridge.volumeLocked ? Theme.accent : Theme.textMuted
+                        Layout.preferredWidth: 32
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            acceptedButtons: Qt.RightButton
+                            onClicked: (mouse) => {
+                                if (mouse.button === Qt.RightButton) {
+                                    volumeContextMenu.popup();
+                                }
+                            }
+                            ToolTip.visible: containsMouse
+                            ToolTip.text: bridge.volumeLocked ? "Volume is locked (Right-click to unlock)" : "Right-click for volume options"
+                        }
                     }
 
                     Rectangle { width: 1; height: 16; color: Theme.panelBorder }
@@ -4229,6 +4694,18 @@ ApplicationWindow {
         visible: isMiniPlayer
         color: Theme.background
         clip: true
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.RightButton
+            onClicked: (mouse) => {
+                if (mouse.button === Qt.RightButton) {
+                    miniPlayerContextMenu.stayOnTop = root.stayOnTop;
+                    miniPlayerContextMenu.currentOpacity = root.opacity;
+                    miniPlayerContextMenu.popup();
+                }
+            }
+        }
 
         RowLayout {
             anchors.fill: parent

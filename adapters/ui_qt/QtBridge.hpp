@@ -77,6 +77,10 @@ class QtBridge : public QObject {
   Q_PROPERTY(QString durationStr READ durationStr NOTIFY playbackChanged)
   Q_PROPERTY(float volume READ volume WRITE setVolume NOTIFY volumeChanged)
   Q_PROPERTY(bool isMuted READ isMuted NOTIFY volumeChanged)
+  Q_PROPERTY(bool volumeLocked READ volumeLocked WRITE setVolumeLocked NOTIFY
+                 volumeLockedChanged)
+  Q_PROPERTY(bool showRemainingTime READ showRemainingTime WRITE
+                 setShowRemainingTime NOTIFY showRemainingTimeChanged)
 
   // Queue & Playback Modes
   Q_PROPERTY(int repeatMode READ repeatMode WRITE setRepeatMode NOTIFY
@@ -336,6 +340,9 @@ public:
   [[nodiscard]] QString durationStr() const { return m_durationStr; }
   [[nodiscard]] float volume() const { return m_volume; }
   [[nodiscard]] bool isMuted() const { return m_isMuted; }
+  [[nodiscard]] bool volumeLocked() const { return m_volumeLocked; }
+  [[nodiscard]] bool showRemainingTime() const { return m_showRemainingTime; }
+  [[nodiscard]] Q_INVOKABLE QString formatDuration(qint64 ms) const;
 
   [[nodiscard]] int repeatMode() const;
   [[nodiscard]] int shuffleMode() const;
@@ -542,10 +549,64 @@ public:
                                  const QString &albumArtist);
   Q_INVOKABLE void queueAlbumLast(const QString &albumTitle,
                                   const QString &albumArtist);
+  /**
+   * @brief Adds all tracks belonging to an album into a target playlist.
+   * @param albumTitle Title of the album.
+   * @param albumArtist Primary artist of the album.
+   * @param playlistName Name of the destination playlist.
+   * @return True if tracks were appended successfully.
+   */
+  Q_INVOKABLE bool addAlbumToPlaylist(const QString &albumTitle,
+                                      const QString &albumArtist,
+                                      const QString &playlistName);
+
+  /**
+   * @brief Opens the filesystem directory containing the album tracks.
+   * @param albumTitle Title of the album.
+   * @param albumArtist Primary artist of the album.
+   */
+  Q_INVOKABLE void showAlbumInFileManager(const QString &albumTitle,
+                                          const QString &albumArtist);
+
+  /**
+   * @brief Retrieves all track entities for an album formatted for QML.
+   * @param albumTitle Title of the album.
+   * @param albumArtist Primary artist of the album.
+   * @return List of track metadata maps.
+   */
+  [[nodiscard]] Q_INVOKABLE QVariantList
+  getAlbumTracks(const QString &albumTitle, const QString &albumArtist) const;
+
+  /**
+   * @brief Initiates online artwork search for the specified album.
+   * @param albumTitle Title of the album.
+   * @param albumArtist Primary artist of the album.
+   */
+  Q_INVOKABLE void searchAlbumArtworkOnline(const QString &albumTitle,
+                                            const QString &albumArtist);
+
+  /**
+   * @brief Exports the cover artwork of an album to a target file path.
+   * @param albumTitle Title of the album.
+   * @param albumArtist Primary artist of the album.
+   * @param targetFilePath Destination image path on disk.
+   * @return True if artwork was successfully extracted and written.
+   */
+  Q_INVOKABLE bool exportAlbumArtwork(const QString &albumTitle,
+                                      const QString &albumArtist,
+                                      const QString &targetFilePath);
+
   Q_INVOKABLE void removeFromQueue(int index);
   Q_INVOKABLE void moveQueueItem(int fromIndex, int toIndex);
   Q_INVOKABLE void clearQueue();
   Q_INVOKABLE void shuffleRemainingQueue();
+
+  /**
+   * @brief Exports the current playback queue into a new static playlist.
+   * @param playlistName Name of the new playlist to create.
+   * @return True if saved successfully.
+   */
+  Q_INVOKABLE bool saveQueueAsPlaylist(const QString &playlistName);
 
   // Mode toggles
   Q_INVOKABLE void setRepeatMode(int mode);
@@ -636,13 +697,16 @@ public:
   // Library & Folders Settings
   Q_INVOKABLE void addMonitoredFolder(const QString &folderPath);
   Q_INVOKABLE void removeMonitoredFolder(int index);
+  Q_INVOKABLE void removeMonitoredFolderPath(const QString &folderPath);
+  Q_INVOKABLE void rescanMonitoredFolder(const QString &folderPath);
   Q_INVOKABLE void rescanAllMonitoredFolders();
   Q_INVOKABLE void incrementalQuickScan();
   Q_INVOKABLE void setFilesystemWatcher(bool enable);
   Q_INVOKABLE void setAutoScanOnStartup(bool enable);
   Q_INVOKABLE void setFormatFilters(const QStringList &formats);
   Q_INVOKABLE void setFormatFilterEnabled(const QString &format, bool enabled);
-  Q_INVOKABLE bool isFormatFilterEnabled(const QString &format) const;
+  [[nodiscard]] Q_INVOKABLE bool
+  isFormatFilterEnabled(const QString &format) const;
   Q_INVOKABLE void setExcludeFolders(const QString &patterns);
   Q_INVOKABLE void setArtworkPriority(const QString &priority);
   Q_INVOKABLE void exportDatabaseBackup(const QString &targetFilePath);
@@ -656,6 +720,21 @@ public:
   Q_INVOKABLE bool removeTracksFromPlaylist(const QString &playlistName,
                                             const QVariantList &tracks);
   Q_INVOKABLE void openPlaylist(const QString &playlistName);
+  Q_INVOKABLE void playPlaylist(const QString &playlistName);
+  Q_INVOKABLE void playPlaylistNext(const QString &playlistName);
+  Q_INVOKABLE void queuePlaylistLast(const QString &playlistName);
+  Q_INVOKABLE bool renamePlaylist(const QString &oldName,
+                                  const QString &newName);
+  Q_INVOKABLE bool duplicatePlaylist(const QString &playlistName);
+  Q_INVOKABLE bool exportPlaylistFile(const QString &playlistName,
+                                      const QString &targetFilePath);
+  Q_INVOKABLE bool deletePlaylist(const QString &playlistName);
+  [[nodiscard]] Q_INVOKABLE bool
+  isSmartPlaylist(const QString &playlistName) const;
+  [[nodiscard]] Q_INVOKABLE QString
+  getSmartPlaylistRules(const QString &playlistName) const;
+  Q_INVOKABLE bool updateSmartPlaylistRules(const QString &playlistName,
+                                            const QString &rulesJson);
   Q_INVOKABLE int deduplicateTracks();
   Q_INVOKABLE bool clearCoverArtCache() {
     clearArtCache();
@@ -839,6 +918,9 @@ public:
    */
   Q_INVOKABLE void resetAllSettingsToDefaults();
 
+  Q_INVOKABLE void setShowRemainingTime(bool enable);
+  Q_INVOKABLE void setVolumeLocked(bool locked);
+
   // Maintenance Utilities
   Q_INVOKABLE void clearArtCache();
   Q_INVOKABLE void checkForUpdates();
@@ -871,6 +953,8 @@ signals:
   void playlistsChanged();
   void ratingsChanged();
   void tableColumnsChanged();
+  void volumeLockedChanged();
+  void showRemainingTimeChanged();
 
 private:
   void setupPositionTimer();
@@ -925,6 +1009,8 @@ private:
   float m_volume{0.8f};
   float m_prevVolume{0.8f};
   bool m_isMuted{false};
+  bool m_volumeLocked{false};
+  bool m_showRemainingTime{false};
 
   // Scanning state
   std::atomic<bool> m_isScanning{false};
