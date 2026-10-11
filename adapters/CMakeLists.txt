@@ -49,6 +49,14 @@ qt_add_qml_module(ui_adapter
         ui_qt/qml/dialogs/NewPlaylistDialog.qml
         ui_qt/qml/views/QueueView.qml
         ui_qt/qml/views/NowPlayingView.qml
+        ui_qt/qml/views/HistoryView.qml
+        ui_qt/qml/views/AlbumGridView.qml
+        ui_qt/qml/views/AlbumDetailView.qml
+        ui_qt/qml/views/ColumnBrowserView.qml
+        ui_qt/qml/views/TrackTableView.qml
+        ui_qt/qml/menubar/AppMenuBar.qml
+        ui_qt/qml/player/MiniPlayer.qml
+        ui_qt/qml/statusbar/StatusBar.qml
 )
 
 target_link_libraries(ui_adapter PUBLIC
