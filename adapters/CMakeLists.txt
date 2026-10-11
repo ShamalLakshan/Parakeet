@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Multimedia Widgets)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SQLITE REQUIRED sqlite3)
 pkg_check_modules(TAGLIB REQUIRED taglib)
@@ -38,6 +38,7 @@ qt_add_qml_module(ui_adapter
         ui_qt/qml/components/Badge.qml
         ui_qt/qml/components/ContextMenu.qml
         ui_qt/qml/components/EqualizerOverlay.qml
+        ui_qt/qml/components/WaveVisualizer.qml
         ui_qt/qml/dialogs/PreferencesDialog.qml
         ui_qt/qml/dialogs/TagEditorDialog.qml
         ui_qt/qml/dialogs/OpenUrlDialog.qml
@@ -47,6 +48,7 @@ qt_add_qml_module(ui_adapter
         ui_qt/qml/dialogs/SleepTimerDialog.qml
         ui_qt/qml/dialogs/NewPlaylistDialog.qml
         ui_qt/qml/views/QueueView.qml
+        ui_qt/qml/views/NowPlayingView.qml
 )
 
 target_link_libraries(ui_adapter PUBLIC
@@ -54,6 +56,7 @@ target_link_libraries(ui_adapter PUBLIC
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Multimedia
+    Qt6::Widgets
     ${SQLITE_LIBRARIES}
     ${TAGLIB_LIBRARIES}
 )

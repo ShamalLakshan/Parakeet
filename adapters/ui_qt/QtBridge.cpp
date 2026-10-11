@@ -2,12 +2,14 @@
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeySequence>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QSysInfo>
@@ -336,6 +338,7 @@ void QtBridge::setupPositionTimer() {
       }
 
       emit positionChanged();
+      updateActiveLyricIndex();
 
       // Check duration
       uint64_t realDur = m_player.getDurationMs();
@@ -1036,6 +1039,7 @@ void QtBridge::updatePlaybackState(const core::Track &track) {
   m_positionMs = 0;
   m_positionStr = "00:00";
   m_durationStr = QString::fromStdString(track.durationFormatted());
+  loadLyricsForTrack(m_currentFilePath);
 
   m_positionTimer->start();
   emit playbackChanged();
@@ -1060,9 +1064,11 @@ void QtBridge::stop() {
   m_isPlaying = false;
   m_positionMs = 0;
   m_positionStr = "00:00";
+  m_activeLyricIndex = -1;
   m_positionTimer->stop();
   emit playbackChanged();
   emit positionChanged();
+  emit activeLyricIndexChanged();
 }
 
 void QtBridge::nextTrack() {
@@ -1098,6 +1104,7 @@ void QtBridge::seek(qint64 posMs) {
   m_positionStr = formatTime(m_positionMs);
   m_player.seek(static_cast<uint64_t>(m_positionMs));
   emit positionChanged();
+  updateActiveLyricIndex();
 }
 
 void QtBridge::setVolume(float volume) {
@@ -3397,4 +3404,195 @@ void QtBridge::saveColumnSettings() {
     s.setValue(col.key + "/width", col.width);
   }
   s.endGroup();
+}
+
+void QtBridge::loadLyricsForTrack(const QString &filePath) {
+  if (filePath.isEmpty()) {
+    m_hasLyrics = false;
+    m_isLyricsSynchronized = false;
+    m_currentLyrics = "";
+    m_lyricsList.clear();
+    m_currentLyricsLines.clear();
+    m_activeLyricIndex = -1;
+    emit lyricsChanged();
+    emit activeLyricIndexChanged();
+    return;
+  }
+
+  QFileInfo fileInfo(filePath);
+  QString basePath = fileInfo.path() + "/" + fileInfo.completeBaseName();
+
+  // Try sidecar .lrc or .txt first
+  QString lrcPath = basePath + ".lrc";
+  if (QFile::exists(lrcPath)) {
+    QFile file(lrcPath);
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      QString content = QString::fromUtf8(file.readAll());
+      parseLrcContent(content);
+      return;
+    }
+  }
+
+  QString txtPath = basePath + ".txt";
+  if (QFile::exists(txtPath)) {
+    QFile file(txtPath);
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      QString content = QString::fromUtf8(file.readAll());
+      parseLrcContent(content);
+      return;
+    }
+  }
+
+  // Try embedded metadata tags
+  std::string embeddedLyrics =
+      m_library.getMetadataExtractor().extractLyrics(filePath.toStdString());
+  if (!embeddedLyrics.empty()) {
+    parseLrcContent(QString::fromUtf8(embeddedLyrics.c_str()));
+    return;
+  }
+
+  // No lyrics found
+  m_hasLyrics = false;
+  m_isLyricsSynchronized = false;
+  m_currentLyrics = "";
+  m_lyricsList.clear();
+  m_currentLyricsLines.clear();
+  m_activeLyricIndex = -1;
+  emit lyricsChanged();
+  emit activeLyricIndexChanged();
+}
+
+void QtBridge::parseLrcContent(const QString &content) {
+  m_lyricsList.clear();
+  m_currentLyricsLines.clear();
+  m_currentLyrics = content;
+
+  if (content.trimmed().isEmpty()) {
+    m_hasLyrics = false;
+    m_isLyricsSynchronized = false;
+    m_activeLyricIndex = -1;
+    emit lyricsChanged();
+    emit activeLyricIndexChanged();
+    return;
+  }
+
+  static const QRegularExpression timeRegex(
+      R"(\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\])");
+
+  QStringList rawLines = content.split('\n');
+  bool hasAnyTimestamp = false;
+
+  for (const QString &rawLine : rawLines) {
+    QString trimmed = rawLine.trimmed();
+    if (trimmed.isEmpty())
+      continue;
+
+    // Skip LRC metadata tags like [ar:Artist], [ti:Title], [al:Album]
+    if (trimmed.startsWith("[ar:") || trimmed.startsWith("[ti:") ||
+        trimmed.startsWith("[al:") || trimmed.startsWith("[by:") ||
+        trimmed.startsWith("[length:") || trimmed.startsWith("[re:") ||
+        trimmed.startsWith("[ve:") || trimmed.startsWith("[offset:")) {
+      continue;
+    }
+
+    auto matchIterator = timeRegex.globalMatch(trimmed);
+    if (matchIterator.hasNext()) {
+      hasAnyTimestamp = true;
+      int lastTimestampEnd = 0;
+      QList<qint64> timestamps;
+      while (matchIterator.hasNext()) {
+        auto match = matchIterator.next();
+        qint64 min = match.captured(1).toLongLong();
+        qint64 sec = match.captured(2).toLongLong();
+        qint64 ms = 0;
+        if (!match.captured(3).isEmpty()) {
+          QString msStr = match.captured(3);
+          if (msStr.length() == 1) {
+            ms = msStr.toLongLong() * 100;
+          } else if (msStr.length() == 2) {
+            ms = msStr.toLongLong() * 10;
+          } else {
+            ms = msStr.toLongLong();
+          }
+        }
+        timestamps.append((min * 60 + sec) * 1000 + ms);
+        lastTimestampEnd = match.capturedEnd();
+      }
+      QString text = trimmed.mid(lastTimestampEnd).trimmed();
+      for (qint64 t : timestamps) {
+        LyricLine line;
+        line.timeMs = t;
+        line.timeStr = formatTime(t);
+        line.text = text;
+        m_lyricsList.append(line);
+      }
+    } else {
+      LyricLine line;
+      line.timeMs = -1;
+      line.timeStr = "";
+      line.text = trimmed;
+      m_lyricsList.append(line);
+    }
+  }
+
+  if (hasAnyTimestamp) {
+    std::sort(m_lyricsList.begin(), m_lyricsList.end(),
+              [](const LyricLine &a, const LyricLine &b) {
+                return a.timeMs < b.timeMs;
+              });
+    m_isLyricsSynchronized = true;
+  } else {
+    m_isLyricsSynchronized = false;
+  }
+
+  m_hasLyrics = !m_lyricsList.isEmpty();
+
+  for (const auto &line : m_lyricsList) {
+    QVariantMap map;
+    map["timeMs"] = line.timeMs;
+    map["timeStr"] = line.timeStr;
+    map["text"] = line.text;
+    m_currentLyricsLines.append(map);
+  }
+
+  updateActiveLyricIndex();
+  emit lyricsChanged();
+}
+
+void QtBridge::updateActiveLyricIndex() {
+  if (!m_isLyricsSynchronized || m_lyricsList.isEmpty()) {
+    if (m_activeLyricIndex != -1) {
+      m_activeLyricIndex = -1;
+      emit activeLyricIndexChanged();
+    }
+    return;
+  }
+
+  int newIndex = -1;
+  for (int i = 0; i < m_lyricsList.size(); ++i) {
+    if (m_lyricsList[i].timeMs <= m_positionMs) {
+      newIndex = i;
+    } else {
+      break;
+    }
+  }
+
+  if (newIndex != m_activeLyricIndex) {
+    m_activeLyricIndex = newIndex;
+    emit activeLyricIndexChanged();
+  }
+}
+
+void QtBridge::seekToLyric(int lineIndex) {
+  if (lineIndex >= 0 && lineIndex < m_lyricsList.size()) {
+    if (m_lyricsList[lineIndex].timeMs >= 0) {
+      seek(m_lyricsList[lineIndex].timeMs);
+    }
+  }
+}
+
+void QtBridge::reloadLyrics() {
+  if (!m_currentFilePath.isEmpty()) {
+    loadLyricsForTrack(m_currentFilePath);
+  }
 }

@@ -82,6 +82,16 @@ class QtBridge : public QObject {
   Q_PROPERTY(bool showRemainingTime READ showRemainingTime WRITE
                  setShowRemainingTime NOTIFY showRemainingTimeChanged)
 
+  // Lyrics State
+  Q_PROPERTY(QString currentLyrics READ currentLyrics NOTIFY lyricsChanged)
+  Q_PROPERTY(bool hasLyrics READ hasLyrics NOTIFY lyricsChanged)
+  Q_PROPERTY(
+      bool isLyricsSynchronized READ isLyricsSynchronized NOTIFY lyricsChanged)
+  Q_PROPERTY(QVariantList currentLyricsLines READ currentLyricsLines NOTIFY
+                 lyricsChanged)
+  Q_PROPERTY(
+      int activeLyricIndex READ activeLyricIndex NOTIFY activeLyricIndexChanged)
+
   // Queue & Playback Modes
   Q_PROPERTY(int repeatMode READ repeatMode WRITE setRepeatMode NOTIFY
                  playbackModeChanged)
@@ -343,6 +353,16 @@ public:
   [[nodiscard]] bool volumeLocked() const { return m_volumeLocked; }
   [[nodiscard]] bool showRemainingTime() const { return m_showRemainingTime; }
   [[nodiscard]] Q_INVOKABLE QString formatDuration(qint64 ms) const;
+
+  [[nodiscard]] QString currentLyrics() const { return m_currentLyrics; }
+  [[nodiscard]] bool hasLyrics() const { return m_hasLyrics; }
+  [[nodiscard]] bool isLyricsSynchronized() const {
+    return m_isLyricsSynchronized;
+  }
+  [[nodiscard]] QVariantList currentLyricsLines() const {
+    return m_currentLyricsLines;
+  }
+  [[nodiscard]] int activeLyricIndex() const { return m_activeLyricIndex; }
 
   [[nodiscard]] int repeatMode() const;
   [[nodiscard]] int shuffleMode() const;
@@ -628,6 +648,8 @@ public:
   // Utilities
   Q_INVOKABLE void showInFileManager(const QString &filePath);
   Q_INVOKABLE void copyToClipboard(const QString &text);
+  Q_INVOKABLE void seekToLyric(int lineIndex);
+  Q_INVOKABLE void reloadLyrics();
 
   // Desktop Menu & File Operations
   Q_INVOKABLE void openAudioFile(const QString &filePath);
@@ -955,10 +977,21 @@ signals:
   void tableColumnsChanged();
   void volumeLockedChanged();
   void showRemainingTimeChanged();
+  void lyricsChanged();
+  void activeLyricIndexChanged();
 
 private:
+  struct LyricLine {
+    qint64 timeMs{-1};
+    QString timeStr;
+    QString text;
+  };
+
   void setupPositionTimer();
   void updatePlaybackState(const core::Track &track);
+  void loadLyricsForTrack(const QString &filePath);
+  void parseLrcContent(const QString &content);
+  void updateActiveLyricIndex();
   void refreshLibraryStats();
   void syncQueueModel();
   void initDefaultHotkeys();
@@ -1011,6 +1044,14 @@ private:
   bool m_isMuted{false};
   bool m_volumeLocked{false};
   bool m_showRemainingTime{false};
+
+  // Lyrics state
+  QString m_currentLyrics{""};
+  bool m_hasLyrics{false};
+  bool m_isLyricsSynchronized{false};
+  QVector<LyricLine> m_lyricsList;
+  QVariantList m_currentLyricsLines;
+  int m_activeLyricIndex{-1};
 
   // Scanning state
   std::atomic<bool> m_isScanning{false};

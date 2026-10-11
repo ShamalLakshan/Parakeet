@@ -9,6 +9,7 @@
 #include <QFile>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTemporaryDir>
 #include <gtest/gtest.h>
 
 namespace {
@@ -1073,4 +1074,73 @@ TEST_F(SettingsTest, TransportDeckAndDeckContextMenuTest) {
   EXPECT_TRUE(bridge.isMuted());
   bridge.toggleMute();
   EXPECT_FALSE(bridge.isMuted());
+}
+
+TEST_F(SettingsTest, NowPlayingAndLyricsTest) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Initially no lyrics
+  EXPECT_FALSE(bridge.hasLyrics());
+  EXPECT_TRUE(bridge.currentLyrics().isEmpty());
+  EXPECT_EQ(bridge.activeLyricIndex(), -1);
+
+  // Create a temporary .lrc file
+  QTemporaryDir tempDir;
+  ASSERT_TRUE(tempDir.isValid());
+  QString audioFile = tempDir.filePath("test_track.flac");
+  QString lrcFile = tempDir.filePath("test_track.lrc");
+
+  QFile file(lrcFile);
+  ASSERT_TRUE(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  QTextStream out(&file);
+  out << "[ti:Test Track]\n";
+  out << "[ar:Test Artist]\n";
+  out << "[00:05.00]Line 1 lyrics\n";
+  out << "[00:15.50]Line 2 lyrics\n";
+  out << "[00:30.00]Line 3 lyrics\n";
+  file.close();
+
+  // Create empty dummy audio file
+  QFile dummyAudio(audioFile);
+  ASSERT_TRUE(dummyAudio.open(QIODevice::WriteOnly));
+  dummyAudio.write("dummy");
+  dummyAudio.close();
+
+  // Load track into player
+  core::Track track;
+  track.id = "track_1";
+  track.filePath = audioFile.toStdString();
+  track.title = "Test Track";
+  track.artist = "Test Artist";
+  track.album = "Test Album";
+  track.durationMs = 60000;
+  db.saveTrack(track);
+
+  bridge.playNow("track_1");
+
+  EXPECT_TRUE(bridge.hasLyrics());
+  EXPECT_TRUE(bridge.isLyricsSynchronized());
+  EXPECT_EQ(bridge.currentLyricsLines().size(), 3);
+
+  // Check seek to lyric and activeLyricIndex
+  bridge.seek(6000);
+  EXPECT_EQ(bridge.activeLyricIndex(), 0);
+
+  bridge.seek(20000);
+  EXPECT_EQ(bridge.activeLyricIndex(), 1);
+
+  bridge.seekToLyric(2);
+  EXPECT_EQ(bridge.activeLyricIndex(), 2);
+  EXPECT_GE(bridge.positionMs(), 30000);
+
+  // Stop resets lyric index
+  bridge.stop();
+  EXPECT_EQ(bridge.activeLyricIndex(), -1);
 }

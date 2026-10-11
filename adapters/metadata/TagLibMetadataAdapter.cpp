@@ -12,7 +12,10 @@
 #include <taglib/mpegfile.h>
 #include <taglib/tag.h>
 #include <taglib/tfile.h>
+#include <taglib/tpropertymap.h>
+#include <taglib/unsynchronizedlyricsframe.h>
 #include <taglib/wavfile.h>
+#include <taglib/xiphcomment.h>
 
 #include <algorithm>
 #include <chrono>
@@ -342,6 +345,52 @@ TagLibMetadataAdapter::extractArtwork(const std::string &filePath) {
   }
 
   return std::nullopt;
+}
+
+std::string TagLibMetadataAdapter::extractLyrics(const std::string &filePath) {
+  if (!fs::exists(filePath)) {
+    return "";
+  }
+
+  TagLib::FileRef fileRef(filePath.c_str());
+  if (!fileRef.isNull() && fileRef.file()) {
+    auto props = fileRef.file()->properties();
+    if (props.contains("LYRICS") && !props["LYRICS"].isEmpty()) {
+      return props["LYRICS"].front().to8Bit(true);
+    }
+    if (props.contains("UNSYNCEDLYRICS") &&
+        !props["UNSYNCEDLYRICS"].isEmpty()) {
+      return props["UNSYNCEDLYRICS"].front().to8Bit(true);
+    }
+  }
+
+  std::string ext = getFileExtension(filePath);
+  if (ext == ".mp3" || ext == ".aiff" || ext == ".wav") {
+    TagLib::MPEG::File mpegFile(filePath.c_str());
+    if (mpegFile.isValid() && mpegFile.ID3v2Tag()) {
+      const auto &frames = mpegFile.ID3v2Tag()->frameList("USLT");
+      if (!frames.isEmpty()) {
+        auto *uslt = dynamic_cast<TagLib::ID3v2::UnsynchronizedLyricsFrame *>(
+            frames.front());
+        if (uslt) {
+          return uslt->text().to8Bit(true);
+        }
+      }
+    }
+  } else if (ext == ".flac") {
+    TagLib::FLAC::File flacFile(filePath.c_str());
+    if (flacFile.isValid() && flacFile.xiphComment()) {
+      const auto &map = flacFile.xiphComment()->fieldListMap();
+      if (map.contains("LYRICS") && !map["LYRICS"].isEmpty()) {
+        return map["LYRICS"].front().to8Bit(true);
+      }
+      if (map.contains("UNSYNCEDLYRICS") && !map["UNSYNCEDLYRICS"].isEmpty()) {
+        return map["UNSYNCEDLYRICS"].front().to8Bit(true);
+      }
+    }
+  }
+
+  return "";
 }
 
 } // namespace adapters

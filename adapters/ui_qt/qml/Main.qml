@@ -22,13 +22,13 @@ ApplicationWindow {
     property bool stayOnTop: false
     property bool showLeftPanel: true
     property bool showRightPanel: true
-    property bool showColumnBrowser: true
+    property bool showColumnBrowser: false
     property bool showStatusBar: true
     property bool showEqualizer: false
     property bool isMiniPlayer: false
     property real normalWidth: 1400
     property real normalHeight: 840
-    property int mainViewMode: 1 // 0: Album Grid, 1: Track Details Table, 2: Album & Tracks View, 3: Listening History
+    property int mainViewMode: 1 // 0: Album Grid, 1: Track Details Table, 2: Album & Tracks View, 3: Listening History, 4: Now Playing View
     property int previousViewMode: 0
     property int activeNavSection: 0 // 0: All Tracks, 1: Albums, 2: Artists, 3: Genres, 4: Now Playing
     property string activeLetterFilter: "All"
@@ -67,16 +67,11 @@ ApplicationWindow {
     }
 
     function switchToNowPlaying() {
-        rightPanelTab = 1;
-        showRightPanel = true;
-        activeNavSection = 4;
-        if (bridge.currentAlbum.length > 0) {
-            bridge.openAlbumDetails(bridge.currentAlbum, bridge.currentArtist);
-            if (mainViewMode !== 2) {
-                previousViewMode = mainViewMode;
-            }
-            mainViewMode = 2;
+        if (mainViewMode !== 4) {
+            previousViewMode = mainViewMode;
         }
+        mainViewMode = 4;
+        activeNavSection = 4;
     }
 
     function switchViewMode(mode) {
@@ -84,8 +79,12 @@ ApplicationWindow {
             switchToExpandedView();
             return;
         }
-        if (mainViewMode === 2) {
-            previousViewMode = 2;
+        if (mode === 4) {
+            switchToNowPlaying();
+            return;
+        }
+        if (mainViewMode === 2 || mainViewMode === 4) {
+            previousViewMode = mainViewMode;
         }
         mainViewMode = mode;
         if (mode === 1) {
@@ -794,7 +793,8 @@ ApplicationWindow {
     Shortcut { sequence: "Alt+1"; onActivated: switchViewMode(1) }
     Shortcut { sequence: "Alt+2"; onActivated: switchViewMode(0) }
     Shortcut { sequence: "Alt+3"; onActivated: switchViewMode(2) }
-    Shortcut { sequence: "Alt+4"; onActivated: switchViewMode(3) }
+    Shortcut { sequence: "Alt+4"; onActivated: switchViewMode(4) }
+    Shortcut { sequence: "Alt+5"; onActivated: switchViewMode(3) }
     Shortcut { sequence: "Ctrl+Shift+M"; onActivated: toggleMiniPlayer() }
     Shortcut { sequence: "F10"; onActivated: toggleMiniPlayer() }
     Shortcut { sequence: "F11"; onActivated: toggleFullscreen() }
@@ -1038,7 +1038,7 @@ ApplicationWindow {
                                 onTriggered: showLeftPanel = !showLeftPanel
                             }
                             MenuItem {
-                                text: (showColumnBrowser ? "Hide" : "Show") + " 3-Column Browser (Ctrl+2)"
+                                text: (showColumnBrowser ? "Hide" : "Show") + " Category Filters (Ctrl+2)"
                                 onTriggered: showColumnBrowser = !showColumnBrowser
                             }
                             MenuItem {
@@ -1095,7 +1095,13 @@ ApplicationWindow {
                                     onTriggered: switchViewMode(2)
                                 }
                                 MenuItem {
-                                    text: "Listening History (Alt+4)"
+                                    text: "Now Playing View (Alt+4)"
+                                    checkable: true
+                                    checked: mainViewMode === 4
+                                    onTriggered: switchViewMode(4)
+                                }
+                                MenuItem {
+                                    text: "Listening History (Alt+5)"
                                     checkable: true
                                     checked: mainViewMode === 3
                                     onTriggered: switchViewMode(3)
@@ -1588,16 +1594,11 @@ ApplicationWindow {
                             { name: "ALL TRACKS", icon: "table", mode: 1 },
                             { name: "ALBUMS", icon: "grid", mode: 0 },
                             { name: "EXPANDED", icon: "album_tracks", mode: 2 },
-                            { name: "NOW PLAYING", icon: "queue", mode: -1 }
+                            { name: "NOW PLAYING", icon: "disc", mode: 4 }
                         ]
 
                         delegate: Rectangle {
-                            property bool isTabActive: {
-                                if (modelData.mode === -1) {
-                                    return activeNavSection === 4 && showRightPanel && rightPanelTab === 1;
-                                }
-                                return mainViewMode === modelData.mode;
-                            }
+                            property bool isTabActive: mainViewMode === modelData.mode
 
                             Layout.preferredWidth: tabRowLayout.implicitWidth + 16
                             Layout.preferredHeight: 30
@@ -1641,7 +1642,7 @@ ApplicationWindow {
                                         switchViewMode(0);
                                     } else if (modelData.mode === 2) {
                                         switchToExpandedView();
-                                    } else if (modelData.mode === -1) {
+                                    } else if (modelData.mode === 4) {
                                         switchToNowPlaying();
                                     }
                                 }
@@ -2019,15 +2020,15 @@ ApplicationWindow {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 26
-                                color: activeNavSection === 4 ? Theme.selection : (npMouse.containsMouse ? Theme.surfaceElevated : "transparent")
+                                color: (activeNavSection === 4 && mainViewMode === 4) ? Theme.selection : (npMouse.containsMouse ? Theme.surfaceElevated : "transparent")
 
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: 16
                                     anchors.rightMargin: 10
                                     spacing: 8
-                                    VectorIcon { name: "queue"; width: 11; height: 11; color: activeNavSection === 4 ? Theme.accent : Theme.textMuted }
-                                    Text { text: "Now Playing Queue"; font.pixelSize: 11; color: activeNavSection === 4 ? Theme.textPrimary : Theme.textSecondary; Layout.fillWidth: true }
+                                    VectorIcon { name: "disc"; width: 11; height: 11; color: (activeNavSection === 4 && mainViewMode === 4) ? Theme.accent : Theme.textMuted }
+                                    Text { text: "Now Playing"; font.pixelSize: 11; color: (activeNavSection === 4 && mainViewMode === 4) ? Theme.textPrimary : Theme.textSecondary; Layout.fillWidth: true }
                                 }
                                 MouseArea {
                                     id: npMouse
@@ -2035,10 +2036,8 @@ ApplicationWindow {
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
-                                        activeNavSection = 4;
                                         activePlaylistName = "";
-                                        rightPanelTab = 1;
-                                        showRightPanel = true;
+                                        switchToNowPlaying();
                                     }
                                 }
                             }
@@ -2269,13 +2268,30 @@ ApplicationWindow {
                                     ToolTip.visible: vm2Mouse.containsMouse
                                     ToolTip.text: "Album Details & Tracks (Alt+3)"
                                 }
+
+                                Rectangle {
+                                    Layout.preferredWidth: 26
+                                    Layout.preferredHeight: 24
+                                    width: 26
+                                    height: 24
+                                    radius: 2
+                                    color: mainViewMode === 4 ? Theme.selection : (vm4Mouse.containsMouse ? Theme.surfaceElevated : "transparent")
+                                    border.color: mainViewMode === 4 ? Theme.accent : "transparent"
+                                    VectorIcon { anchors.centerIn: parent; name: "disc"; width: 12; height: 12; color: mainViewMode === 4 ? Theme.accent : Theme.textMuted }
+                                    MouseArea {
+                                        id: vm4Mouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                        onClicked: switchViewMode(4)
+                                    }
+                                    ToolTip.visible: vm4Mouse.containsMouse
+                                    ToolTip.text: "Now Playing View (Alt+4)"
+                                }
                             }
 
                             Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 16; width: 1; height: 16; color: Theme.panelBorder }
 
-                            // Toggle Column Browser Button
+                            // Toggle Category Filters Button
                             Rectangle {
-                                Layout.preferredWidth: colBtnLayout.implicitWidth + 12
+                                Layout.preferredWidth: colBtnLayout.implicitWidth + 14
                                 Layout.preferredHeight: 22
                                 Layout.alignment: Qt.AlignVCenter
                                 width: Layout.preferredWidth
@@ -2288,11 +2304,25 @@ ApplicationWindow {
                                     id: colBtnLayout
                                     anchors.centerIn: parent
                                     spacing: 4
+
+                                    VectorIcon {
+                                        name: "filter"
+                                        width: 10
+                                        height: 10
+                                        color: showColumnBrowser ? Theme.accent : Theme.textMuted
+                                    }
+
                                     Text {
-                                        text: "Columns"
+                                        text: "Filters"
                                         font.pixelSize: 10
-                                        font.bold: true
-                                        color: showColumnBrowser ? Theme.accentHover : Theme.textMuted
+                                        font.bold: showColumnBrowser
+                                        color: showColumnBrowser ? Theme.accentHover : Theme.textSecondary
+                                    }
+
+                                    Text {
+                                        text: showColumnBrowser ? "▲" : "▼"
+                                        font.pixelSize: 8
+                                        color: showColumnBrowser ? Theme.accent : Theme.textMuted
                                     }
                                 }
 
@@ -2303,6 +2333,9 @@ ApplicationWindow {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: showColumnBrowser = !showColumnBrowser
                                 }
+
+                                ToolTip.visible: cbMouse.containsMouse
+                                ToolTip.text: (showColumnBrowser ? "Collapse" : "Expand") + " Category Filters (Genre, Artist, Album) (Ctrl+2)"
                             }
 
                             // Alphabet jump ribbon
@@ -2369,13 +2402,17 @@ ApplicationWindow {
                         }
                     }
 
-                    // Column browser
+                    // Category filter browser (Genre, Artist, Album)
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: showColumnBrowser ? 120 : 0
                         visible: showColumnBrowser
                         color: Theme.background
                         clip: true
+
+                        Behavior on Layout.preferredHeight {
+                            NumberAnimation { duration: 160; easing.type: Easing.InOutQuad }
+                        }
 
                         RowLayout {
                             anchors.fill: parent
@@ -3895,6 +3932,17 @@ ApplicationWindow {
                             }
                         }
                     }
+
+                    // Now Playing View
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        visible: mainViewMode === 4
+
+                        NowPlayingView {
+                            anchors.fill: parent
+                        }
+                    }
                 }
             }
 
@@ -4418,27 +4466,58 @@ ApplicationWindow {
                             source: bridge.currentArtUrl
                             fillMode: Image.PreserveAspectCrop
                         }
+
+                        MouseArea {
+                            id: deckArtMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: switchToNowPlaying()
+                        }
+                        ToolTip.visible: deckArtMouse.containsMouse
+                        ToolTip.text: "Open Now Playing View"
                     }
 
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 2
 
-                        Text {
-                            text: bridge.currentTrackTitle
-                            font.pixelSize: 12
-                            font.bold: true
-                            color: Theme.textPrimary
-                            elide: Text.ElideRight
+                        Item {
                             Layout.fillWidth: true
-                        }
+                            Layout.preferredHeight: deckTrackCol.implicitHeight
 
-                        Text {
-                            text: bridge.currentArtist + (bridge.currentAlbum.length > 0 ? " • " + bridge.currentAlbum : "")
-                            font.pixelSize: 10
-                            color: Theme.textSecondary
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
+                            ColumnLayout {
+                                id: deckTrackCol
+                                anchors.fill: parent
+                                spacing: 2
+
+                                Text {
+                                    text: bridge.currentTrackTitle
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    color: deckTrackMouse.containsMouse ? Theme.accent : Theme.textPrimary
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+
+                                Text {
+                                    text: bridge.currentArtist + (bridge.currentAlbum.length > 0 ? " • " + bridge.currentAlbum : "")
+                                    font.pixelSize: 10
+                                    color: Theme.textSecondary
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                            }
+
+                            MouseArea {
+                                id: deckTrackMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: switchToNowPlaying()
+                            }
+                            ToolTip.visible: deckTrackMouse.containsMouse
+                            ToolTip.text: "Open Now Playing View"
                         }
 
                         RowLayout {
