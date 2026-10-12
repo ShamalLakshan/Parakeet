@@ -8,6 +8,7 @@ Item {
 
     property bool isPlaylistView: false
     property string activePlaylistName: ""
+    property alias currentIndex: trackTableListView.currentIndex
 
     signal requestColumnHeaderContextMenu(string colKey, string colTitle)
     signal requestViewportContextMenu()

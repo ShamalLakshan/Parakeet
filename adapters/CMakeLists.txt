@@ -47,6 +47,8 @@ qt_add_qml_module(ui_adapter
         ui_qt/qml/dialogs/AboutDialog.qml
         ui_qt/qml/dialogs/SleepTimerDialog.qml
         ui_qt/qml/dialogs/NewPlaylistDialog.qml
+        ui_qt/qml/dialogs/RenamePlaylistDialog.qml
+        ui_qt/qml/dialogs/DeleteConfirmDialog.qml
         ui_qt/qml/views/QueueView.qml
         ui_qt/qml/views/NowPlayingView.qml
         ui_qt/qml/views/HistoryView.qml
@@ -54,7 +56,12 @@ qt_add_qml_module(ui_adapter
         ui_qt/qml/views/AlbumDetailView.qml
         ui_qt/qml/views/ColumnBrowserView.qml
         ui_qt/qml/views/TrackTableView.qml
+        ui_qt/qml/views/ViewSubToolbar.qml
         ui_qt/qml/menubar/AppMenuBar.qml
+        ui_qt/qml/toolbar/TopToolbar.qml
+        ui_qt/qml/navigation/LeftSidebar.qml
+        ui_qt/qml/inspector/RightInspectorPanel.qml
+        ui_qt/qml/player/PlayerDeck.qml
         ui_qt/qml/player/MiniPlayer.qml
         ui_qt/qml/statusbar/StatusBar.qml
 )
