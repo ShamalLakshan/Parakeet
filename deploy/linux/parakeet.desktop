@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Parakeet
+GenericName=Music Player
+Comment=Lightweight high-fidelity music player
+Exec=Parakeet %U
+Icon=parakeet
+Terminal=false
+Categories=Audio;Music;Player;AudioVideo;
+MimeType=audio/flac;audio/x-wav;audio/mpeg;audio/mp4;audio/ogg;audio/x-vorbis+ogg;audio/opus;audio/x-aiff;audio/aac;audio/x-monkeys-audio;audio/x-ms-wma;application/x-cue;
+StartupNotify=true
+StartupWMClass=Parakeet

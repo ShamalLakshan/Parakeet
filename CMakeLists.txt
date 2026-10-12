@@ -17,3 +17,13 @@ add_subdirectory(app)
 add_subdirectory(sdk)
 add_subdirectory(plugins)
 add_subdirectory(tests)
+
+# Packaging
+set(CPACK_PACKAGE_NAME "Parakeet")
+set(CPACK_PACKAGE_VENDOR "ParakeetAudio")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Lightweight high-fidelity music player")
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+include(CPack)

@@ -1,7 +1,9 @@
 # Build and Output Directories
 build/
+build-*/
 bin/
 lib/
+dist/
 docs/
 out/
 CMakeFiles/

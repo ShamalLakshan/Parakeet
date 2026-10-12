@@ -11,3 +11,8 @@ target_link_libraries(Parakeet PRIVATE
     ${SQLITE_LIBRARIES}
     ${TAGLIB_LIBRARIES}
 )
+
+install(TARGETS Parakeet
+    RUNTIME DESTINATION bin
+    BUNDLE DESTINATION .
+)

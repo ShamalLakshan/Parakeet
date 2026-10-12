@@ -29,6 +29,15 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/
     FILES_MATCHING PATTERN "*.json"
 )
 
+if(UNIX AND NOT APPLE)
+    install(FILES ${CMAKE_SOURCE_DIR}/deploy/linux/parakeet.desktop
+        DESTINATION share/applications
+    )
+    install(FILES ${CMAKE_SOURCE_DIR}/deploy/linux/icons/parakeet.svg
+        DESTINATION share/icons/hicolor/scalable/apps
+    )
+endif()
+
 qt_add_qml_module(ui_adapter
     URI PlayerUI
     VERSION 1.0

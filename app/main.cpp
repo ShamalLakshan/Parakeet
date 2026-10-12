@@ -1,5 +1,7 @@
 #include <QApplication>
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QStandardPaths>
@@ -19,10 +21,34 @@ int main(int argc, char *argv[]) {
   app.setOrganizationName("ParakeetAudio");
   app.setApplicationName("Parakeet");
 
-  // SQLite database in app data folder
-  QString appDataDir =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  QDir().mkpath(appDataDir);
+  // Determine application data directory (support portable mode & AppImage)
+  QString baseDir;
+  if (qEnvironmentVariableIsSet("APPIMAGE")) {
+    baseDir = QFileInfo(qEnvironmentVariable("APPIMAGE")).absolutePath();
+  } else {
+    baseDir = QCoreApplication::applicationDirPath();
+  }
+
+  const QString portableDir = baseDir + "/data";
+  const bool isPortable = QFile::exists(baseDir + "/portable.dat") ||
+                          QDir(portableDir).exists() ||
+                          app.arguments().contains("--portable") ||
+                          qEnvironmentVariableIsSet("PARAKEET_PORTABLE");
+
+  QString appDataDir;
+  if (isPortable) {
+    appDataDir = portableDir;
+    QDir().mkpath(appDataDir);
+    qputenv("PARAKEET_PORTABLE", "1");
+    qputenv("PARAKEET_DATA_DIR", portableDir.toUtf8());
+    qputenv("XDG_DATA_HOME", (portableDir + "/share").toUtf8());
+    qputenv("XDG_CONFIG_HOME", (portableDir + "/config").toUtf8());
+    qputenv("XDG_CACHE_HOME", (portableDir + "/cache").toUtf8());
+  } else {
+    appDataDir =
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(appDataDir);
+  }
   QString dbPath = appDataDir + "/parakeet_library.db";
 
   auto dbAdapter = std::make_unique<adapters::SqliteDatabaseAdapter>();

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1e24"/>
+      <stop offset="100%" stop-color="#141416"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5c9eff"/>
+      <stop offset="100%" stop-color="#3a82f7"/>
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#28c840" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#5c9eff" stop-opacity="0.9"/>
+    </linearGradient>
+    <filter id="dropShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Squircle Base -->
+  <rect x="16" y="16" width="224" height="224" rx="48" ry="48" fill="url(#bgGrad)" stroke="#24242c" stroke-width="4"/>
+
+  <!-- Audio Waveform / Bird Wings Emblem -->
+  <g filter="url(#dropShadow)">
+    <!-- Dynamic Audio Bars / Tail feathers -->
+    <rect x="52" y="112" width="10" height="32" rx="5" fill="#3a82f7" opacity="0.6"/>
+    <rect x="68" y="96" width="10" height="64" rx="5" fill="#3a82f7" opacity="0.75"/>
+    <rect x="84" y="80" width="10" height="96" rx="5" fill="#5c9eff" opacity="0.9"/>
+    <rect x="100" y="68" width="10" height="120" rx="5" fill="url(#accentGrad)"/>
+
+    <!-- Parakeet Profile & Crest (Audio-Wave-Formed Bird) -->
+    <path d="M 124 180 
+             C 124 180, 118 130, 126 100 
+             C 132 78, 148 64, 170 64 
+             C 188 64, 204 74, 204 94 
+             C 204 110, 196 122, 184 130 
+             L 194 134 
+             C 184 146, 172 152, 160 154 
+             C 152 172, 138 180, 124 180 Z" 
+          fill="url(#accentGrad)"/>
+
+    <!-- Wing Highlight Arc -->
+    <path d="M 134 116 
+             C 142 98, 158 90, 174 94 
+             C 166 112, 150 126, 138 140 
+             C 134 132, 133 124, 134 116 Z" 
+          fill="url(#glowGrad)"/>
+
+    <!-- Beak -->
+    <path d="M 204 88 L 222 96 L 204 104 Z" fill="#f5a623"/>
+
+    <!-- Eye (Music Note dot style) -->
+    <circle cx="178" cy="84" r="5" fill="#141416"/>
+    <circle cx="179.5" cy="82.5" r="1.8" fill="#ffffff"/>
+  </g>
+</svg>
