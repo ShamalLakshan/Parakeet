@@ -74,6 +74,9 @@ int main(int argc, char *argv[]) {
     QMetaObject::invokeMethod(&bridge, "nextTrack", Qt::QueuedConnection);
   });
 
+  // Restore playback session according to startup action preferences
+  bridge.restorePlaybackSession();
+
   // QML engine and album art provider
   QString coversDir = appDataDir + "/covers";
   QQmlApplicationEngine engine;

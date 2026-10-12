@@ -106,7 +106,30 @@ class QtBridge : public QObject {
                  playlistsChanged)
   Q_PROPERTY(
       QVariantMap tableColumns READ tableColumns NOTIFY tableColumnsChanged)
-  Q_PROPERTY(QStringList tableColumnKeys READ tableColumnKeys CONSTANT)
+  Q_PROPERTY(QStringList tableColumnKeys READ tableColumnKeys NOTIFY
+                 tableColumnsChanged)
+  Q_PROPERTY(QStringList tableColumnOrder READ tableColumnOrder WRITE
+                 setColumnOrder NOTIFY tableColumnsChanged)
+
+  // View Layout & Panel Persistence (Issue #14)
+  Q_PROPERTY(int leftPanelWidth READ leftPanelWidth WRITE setLeftPanelWidth
+                 NOTIFY viewLayoutChanged)
+  Q_PROPERTY(bool showLeftPanel READ showLeftPanel WRITE setShowLeftPanel NOTIFY
+                 viewLayoutChanged)
+  Q_PROPERTY(int rightPanelWidth READ rightPanelWidth WRITE setRightPanelWidth
+                 NOTIFY viewLayoutChanged)
+  Q_PROPERTY(bool showRightPanel READ showRightPanel WRITE setShowRightPanel
+                 NOTIFY viewLayoutChanged)
+  Q_PROPERTY(int columnBrowserHeight READ columnBrowserHeight WRITE
+                 setColumnBrowserHeight NOTIFY viewLayoutChanged)
+  Q_PROPERTY(bool showColumnBrowser READ showColumnBrowser WRITE
+                 setShowColumnBrowser NOTIFY viewLayoutChanged)
+  Q_PROPERTY(int activeWorkspaceViewMode READ activeWorkspaceViewMode WRITE
+                 setActiveWorkspaceViewMode NOTIFY viewLayoutChanged)
+  Q_PROPERTY(int activeNavSection READ activeNavSection WRITE
+                 setActiveNavSection NOTIFY viewLayoutChanged)
+  Q_PROPERTY(QString activePlaylistName READ activePlaylistName WRITE
+                 setActivePlaylistName NOTIFY viewLayoutChanged)
 
   // Library Statistics
   Q_PROPERTY(int totalAlbums READ totalAlbums NOTIFY libraryStatsChanged)
@@ -303,7 +326,7 @@ public:
   explicit QtBridge(core::PlayerService &player, core::LibraryService &library,
                     adapters::ThemeLoader *themeLoader = nullptr,
                     QObject *parent = nullptr);
-  ~QtBridge() override = default;
+  ~QtBridge() override;
 
   [[nodiscard]] AlbumListModel *albumModel() const { return m_albumModel; }
   [[nodiscard]] TrackListModel *trackModel() const { return m_trackModel; }
@@ -776,6 +799,44 @@ public:
   Q_INVOKABLE void autoSizeColumn(const QString &colKey);
   Q_INVOKABLE void autoSizeAllColumns();
   Q_INVOKABLE void resetTableColumns();
+  Q_INVOKABLE void moveColumn(int fromIndex, int toIndex);
+  Q_INVOKABLE void setColumnOrder(const QStringList &orderKeys);
+  [[nodiscard]] Q_INVOKABLE QStringList tableColumnOrder() const;
+
+  // Window Geometry & Layout (Issue #14)
+  Q_INVOKABLE void saveWindowGeometry(int x, int y, int width, int height,
+                                      bool isMaximized);
+  [[nodiscard]] Q_INVOKABLE QVariantMap
+  loadWindowGeometry(int defaultWidth = 1400, int defaultHeight = 840);
+
+  [[nodiscard]] int leftPanelWidth() const { return m_leftPanelWidth; }
+  Q_INVOKABLE void setLeftPanelWidth(int width);
+  [[nodiscard]] bool showLeftPanel() const { return m_showLeftPanel; }
+  Q_INVOKABLE void setShowLeftPanel(bool show);
+  [[nodiscard]] int rightPanelWidth() const { return m_rightPanelWidth; }
+  Q_INVOKABLE void setRightPanelWidth(int width);
+  [[nodiscard]] bool showRightPanel() const { return m_showRightPanel; }
+  Q_INVOKABLE void setShowRightPanel(bool show);
+  [[nodiscard]] int columnBrowserHeight() const {
+    return m_columnBrowserHeight;
+  }
+  Q_INVOKABLE void setColumnBrowserHeight(int height);
+  [[nodiscard]] bool showColumnBrowser() const { return m_showColumnBrowser; }
+  Q_INVOKABLE void setShowColumnBrowser(bool show);
+  [[nodiscard]] int activeWorkspaceViewMode() const {
+    return m_activeWorkspaceViewMode;
+  }
+  Q_INVOKABLE void setActiveWorkspaceViewMode(int mode);
+  [[nodiscard]] int activeNavSection() const { return m_activeNavSection; }
+  Q_INVOKABLE void setActiveNavSection(int nav);
+  [[nodiscard]] QString activePlaylistName() const {
+    return m_activePlaylistName;
+  }
+  Q_INVOKABLE void setActivePlaylistName(const QString &name);
+
+  // Playback Session Restore (Issue #15)
+  Q_INVOKABLE void savePlaybackSession();
+  Q_INVOKABLE void restorePlaybackSession();
 
   // General Settings
   Q_INVOKABLE void setLanguage(const QString &lang);
@@ -975,6 +1036,7 @@ signals:
   void playlistsChanged();
   void ratingsChanged();
   void tableColumnsChanged();
+  void viewLayoutChanged();
   void volumeLockedChanged();
   void showRemainingTimeChanged();
   void lyricsChanged();
@@ -1158,6 +1220,20 @@ private:
 
   // Diagnostics Settings
   QString m_loggingVerbosity{"Info"};
+
+  // View Layout state (Issue #14)
+  int m_leftPanelWidth{210};
+  bool m_showLeftPanel{true};
+  int m_rightPanelWidth{270};
+  bool m_showRightPanel{true};
+  int m_columnBrowserHeight{121};
+  bool m_showColumnBrowser{false};
+  int m_activeWorkspaceViewMode{1};
+  int m_activeNavSection{0};
+  QString m_activePlaylistName{""};
+
+  void loadViewLayoutSettings();
+  void saveViewLayoutSettings();
 
   struct ColumnMeta {
     QString key;

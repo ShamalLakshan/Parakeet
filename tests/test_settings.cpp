@@ -7,6 +7,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QGuiApplication>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -87,24 +88,29 @@ public:
 class SettingsTest : public ::testing::Test {
 protected:
   static void SetUpTestSuite() {
+    qputenv("QT_QPA_PLATFORM", "offscreen");
     int argc = 1;
     static char appName[] = "parakeet_tests";
     static char *argv[] = {appName, nullptr};
     if (!QCoreApplication::instance()) {
-      new QCoreApplication(argc, argv);
+      new QGuiApplication(argc, argv);
     }
     QCoreApplication::setOrganizationName("ParakeetAudio");
     QCoreApplication::setApplicationName("ParakeetTest");
   }
 
   void SetUp() override {
-    QSettings s("ParakeetAudio", "ParakeetTest");
-    s.clear();
+    QSettings s1("ParakeetAudio", "ParakeetTest");
+    s1.clear();
+    QSettings s2("ParakeetAudio", "Parakeet");
+    s2.clear();
   }
 
   void TearDown() override {
-    QSettings s("ParakeetAudio", "ParakeetTest");
-    s.clear();
+    QSettings s1("ParakeetAudio", "ParakeetTest");
+    s1.clear();
+    QSettings s2("ParakeetAudio", "Parakeet");
+    s2.clear();
   }
 };
 
@@ -1143,4 +1149,262 @@ TEST_F(SettingsTest, NowPlayingAndLyricsTest) {
   // Stop resets lyric index
   bridge.stop();
   EXPECT_EQ(bridge.activeLyricIndex(), -1);
+}
+
+TEST_F(SettingsTest, WindowGeometryAndMultiMonitorBounds) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // 1. Initial load when no geometry was saved
+  QVariantMap initGeom = bridge.loadWindowGeometry(600, 400);
+  EXPECT_FALSE(initGeom["valid"].toBool());
+  EXPECT_EQ(initGeom["width"].toInt(), 600);
+  EXPECT_EQ(initGeom["height"].toInt(), 400);
+
+  // 2. Save valid geometry and load it back
+  bridge.saveWindowGeometry(120, 160, 500, 350, false);
+  QVariantMap savedGeom = bridge.loadWindowGeometry(600, 400);
+  EXPECT_TRUE(savedGeom["valid"].toBool());
+  EXPECT_FALSE(savedGeom["maximized"].toBool());
+  EXPECT_EQ(savedGeom["x"].toInt(), 120);
+  EXPECT_EQ(savedGeom["y"].toInt(), 160);
+  EXPECT_EQ(savedGeom["width"].toInt(), 500);
+  EXPECT_EQ(savedGeom["height"].toInt(), 350);
+
+  // 3. Maximized window geometry
+  bridge.saveWindowGeometry(50, 50, 500, 350, true);
+  QVariantMap maxGeom = bridge.loadWindowGeometry(600, 400);
+  EXPECT_TRUE(maxGeom["valid"].toBool());
+  EXPECT_TRUE(maxGeom["maximized"].toBool());
+
+  // 4. Safe monitor bounds checking on off-screen / disconnected coordinates
+  bridge.saveWindowGeometry(-99999, -99999, 500, 350, false);
+  QVariantMap fallbackGeom = bridge.loadWindowGeometry(600, 400);
+  EXPECT_TRUE(fallbackGeom["valid"].toBool());
+  // Off-screen coordinates must be clamped/re-centered rather than returning
+  // -99999
+  EXPECT_NE(fallbackGeom["x"].toInt(), -99999);
+  EXPECT_NE(fallbackGeom["y"].toInt(), -99999);
+  EXPECT_GE(fallbackGeom["x"].toInt(), -500);
+  EXPECT_GE(fallbackGeom["y"].toInt(), -500);
+}
+
+TEST_F(SettingsTest, ViewLayoutAndPanelDimensionsPersistence) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Default values
+  EXPECT_EQ(bridge.leftPanelWidth(), 210);
+  EXPECT_TRUE(bridge.showLeftPanel());
+  EXPECT_EQ(bridge.rightPanelWidth(), 270);
+  EXPECT_TRUE(bridge.showRightPanel());
+  EXPECT_EQ(bridge.columnBrowserHeight(), 121);
+  EXPECT_FALSE(bridge.showColumnBrowser());
+  EXPECT_EQ(bridge.activeWorkspaceViewMode(), 1);
+  EXPECT_EQ(bridge.activeNavSection(), 0);
+
+  // Update layout properties
+  bridge.setLeftPanelWidth(290);
+  bridge.setShowLeftPanel(false);
+  bridge.setRightPanelWidth(375);
+  bridge.setShowRightPanel(false);
+  bridge.setColumnBrowserHeight(260);
+  bridge.setShowColumnBrowser(true);
+  bridge.setActiveWorkspaceViewMode(1);
+  bridge.setActiveNavSection(2);
+  bridge.setActivePlaylistName("Synthwave Favorites");
+
+  EXPECT_EQ(bridge.leftPanelWidth(), 290);
+  EXPECT_FALSE(bridge.showLeftPanel());
+  EXPECT_EQ(bridge.rightPanelWidth(), 375);
+  EXPECT_FALSE(bridge.showRightPanel());
+  EXPECT_EQ(bridge.columnBrowserHeight(), 260);
+  EXPECT_TRUE(bridge.showColumnBrowser());
+  EXPECT_EQ(bridge.activeWorkspaceViewMode(), 1);
+  EXPECT_EQ(bridge.activeNavSection(), 2);
+  EXPECT_EQ(bridge.activePlaylistName(), "Synthwave Favorites");
+
+  // Verify persistence in a fresh bridge instance
+  QtBridge bridge2(player, library, &themeLoader);
+  EXPECT_EQ(bridge2.leftPanelWidth(), 290);
+  EXPECT_FALSE(bridge2.showLeftPanel());
+  EXPECT_EQ(bridge2.rightPanelWidth(), 375);
+  EXPECT_FALSE(bridge2.showRightPanel());
+  EXPECT_EQ(bridge2.columnBrowserHeight(), 260);
+  EXPECT_TRUE(bridge2.showColumnBrowser());
+  EXPECT_EQ(bridge2.activeWorkspaceViewMode(), 1);
+  EXPECT_EQ(bridge2.activeNavSection(), 2);
+  EXPECT_EQ(bridge2.activePlaylistName(), "Synthwave Favorites");
+}
+
+TEST_F(SettingsTest, TableColumnOrderAndCustomStatePersistence) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QtBridge bridge(player, library, &themeLoader);
+
+  // Initial default order
+  QStringList initialOrder = bridge.tableColumnOrder();
+  ASSERT_EQ(initialOrder.size(), 17);
+  EXPECT_EQ(initialOrder[0], "trackNumber");
+  EXPECT_EQ(initialOrder[1], "title");
+  EXPECT_EQ(initialOrder[2], "artist");
+
+  // Reorder via moveColumn (move artist at index 2 to index 0)
+  bridge.moveColumn(2, 0);
+  QStringList reordered = bridge.tableColumnOrder();
+  EXPECT_EQ(reordered[0], "artist");
+  EXPECT_EQ(reordered[1], "trackNumber");
+  EXPECT_EQ(reordered[2], "title");
+
+  // Reorder via setColumnOrder
+  QStringList customOrder = initialOrder;
+  customOrder.swapItemsAt(0, 3); // swap trackNumber with album
+  bridge.setColumnOrder(customOrder);
+  EXPECT_EQ(bridge.tableColumnOrder()[0], "album");
+
+  // Column width and sort persistence
+  bridge.setColumnWidth("album", 220);
+  bridge.setColumnWidth("title", 310);
+  bridge.trackModel()->sortBy("artist", false);
+
+  // Reload into fresh bridge instance
+  QtBridge bridge2(player, library, &themeLoader);
+  EXPECT_EQ(bridge2.tableColumnOrder()[0], "album");
+  EXPECT_EQ(bridge2.getColumnWidth("album"), 220);
+  EXPECT_EQ(bridge2.getColumnWidth("title"), 310);
+  EXPECT_EQ(bridge2.trackModel()->sortColumn(), "artist");
+  EXPECT_FALSE(bridge2.trackModel()->sortAscending());
+
+  // Reset columns restored default order
+  bridge2.resetTableColumns();
+  EXPECT_EQ(bridge2.tableColumnOrder()[0], "trackNumber");
+  EXPECT_EQ(bridge2.tableColumnOrder()[1], "title");
+}
+
+TEST_F(SettingsTest, PlaybackSessionSaveAndRestoreModes) {
+  auto audio = std::make_shared<tests::MockAudioEnginePort>();
+  MockDb db;
+  MockExtractor extractor;
+  core::LibraryService library(db, extractor);
+  core::PlayerService player(audio);
+  adapters::ThemeLoader themeLoader;
+
+  QTemporaryDir tempDir;
+  ASSERT_TRUE(tempDir.isValid());
+
+  QString path1 = tempDir.filePath("sess_1.flac");
+  QString path2 = tempDir.filePath("sess_2.flac");
+  QString path3 = tempDir.filePath("sess_3.flac");
+
+  for (const QString &p : {path1, path2, path3}) {
+    QFile f(p);
+    ASSERT_TRUE(f.open(QIODevice::WriteOnly));
+    f.write("dummy audio data");
+    f.close();
+  }
+
+  core::Track t1;
+  t1.id = "sess_1";
+  t1.title = "Session Song 1";
+  t1.artist = "Session Artist";
+  t1.album = "Session Album";
+  t1.filePath = path1.toStdString();
+  t1.durationMs = 210000;
+
+  core::Track t2;
+  t2.id = "sess_2";
+  t2.title = "Session Song 2";
+  t2.artist = "Session Artist";
+  t2.album = "Session Album";
+  t2.filePath = path2.toStdString();
+  t2.durationMs = 180000;
+
+  core::Track t3;
+  t3.id = "sess_3";
+  t3.title = "Session Song 3";
+  t3.artist = "Session Artist";
+  t3.album = "Session Album";
+  t3.filePath = path3.toStdString();
+  t3.durationMs = 240000;
+
+  db.saveTrack(t1);
+  db.saveTrack(t2);
+  db.saveTrack(t3);
+
+  QtBridge bridge(player, library, &themeLoader);
+  bridge.trackModel()->loadAllTracks();
+
+  // Set playback attributes
+  bridge.setVolume(0.65f);
+  bridge.toggleMute(); // mute = true
+  bridge.setShuffleMode(1);
+  bridge.setRepeatMode(2);
+
+  bridge.playSelectionNow(QStringList{"sess_1"});
+  EXPECT_TRUE(player.getCurrentTrack().has_value());
+  bridge.playTracksNext(QStringList{"sess_2"});
+  bridge.queueTracksLast(QStringList{"sess_3"});
+  bridge.seek(42000);
+
+  // Save session
+  bridge.savePlaybackSession();
+
+  QSettings s("ParakeetAudio", "Parakeet");
+  s.sync();
+  EXPECT_TRUE(s.value("session/has_session").toBool());
+  EXPECT_EQ(s.value("session/track_id").toString(), "sess_1");
+  EXPECT_EQ(s.value("session/position_ms").toInt(), 42000);
+
+  // 1. "Open Empty" mode: does not restore
+  auto audioEmpty = std::make_shared<tests::MockAudioEnginePort>();
+  core::PlayerService playerEmpty(audioEmpty);
+  QtBridge bridgeEmpty(playerEmpty, library, &themeLoader);
+  bridgeEmpty.setStartupAction("Open Empty");
+  bridgeEmpty.restorePlaybackSession();
+  EXPECT_FALSE(playerEmpty.getCurrentTrack().has_value());
+
+  // 2. "Restore Session" mode: restores in paused state
+  auto audioRestore = std::make_shared<tests::MockAudioEnginePort>();
+  core::PlayerService playerRestore(audioRestore);
+  QtBridge bridgeRestore(playerRestore, library, &themeLoader);
+  bridgeRestore.setStartupAction("Restore Session");
+  bridgeRestore.restorePlaybackSession();
+  ASSERT_TRUE(playerRestore.getCurrentTrack().has_value());
+  EXPECT_EQ(playerRestore.getCurrentTrack()->id, "sess_1");
+  EXPECT_FALSE(playerRestore.isPlaying());
+  EXPECT_EQ(bridgeRestore.positionMs(), 42000);
+  EXPECT_TRUE(bridgeRestore.isMuted());
+  EXPECT_FLOAT_EQ(bridgeRestore.volume(), 0.0f);
+  bridgeRestore.toggleMute(); // unmute restores pre-mute volume
+  EXPECT_FLOAT_EQ(bridgeRestore.volume(), 0.65f);
+  EXPECT_EQ(bridgeRestore.shuffleMode(), 1);
+  EXPECT_EQ(bridgeRestore.repeatMode(), 2);
+  EXPECT_GE(bridgeRestore.upNextCount(), 2);
+
+  // 3. "Play Immediately" mode: restores in playing state
+  auto audioPlay = std::make_shared<tests::MockAudioEnginePort>();
+  core::PlayerService playerPlay(audioPlay);
+  QtBridge bridgePlay(playerPlay, library, &themeLoader);
+  bridgePlay.setStartupAction("Play Immediately");
+  bridgePlay.restorePlaybackSession();
+  ASSERT_TRUE(playerPlay.getCurrentTrack().has_value());
+  EXPECT_EQ(playerPlay.getCurrentTrack()->id, "sess_1");
+  EXPECT_TRUE(playerPlay.isPlaying());
 }

@@ -26,22 +26,65 @@ ApplicationWindow {
 
     // Panel visibility and navigation state
     property bool stayOnTop: false
-    property bool showLeftPanel: true
-    property bool showRightPanel: true
-    property bool showColumnBrowser: false
+    property bool showLeftPanel: bridge.showLeftPanel
+    property bool showRightPanel: bridge.showRightPanel
+    property bool showColumnBrowser: bridge.showColumnBrowser
     property bool showStatusBar: true
     property bool showEqualizer: false
     property bool isMiniPlayer: false
     property real normalWidth: 1400
     property real normalHeight: 840
-    property int mainViewMode: 1 // 0: Album Grid, 1: Track Details Table, 2: Album & Tracks View, 3: Listening History, 4: Now Playing View
+    property int mainViewMode: bridge.activeWorkspaceViewMode // 0: Album Grid, 1: Track Details Table, 2: Album & Tracks View, 3: Listening History, 4: Now Playing View
     property int previousViewMode: 0
-    property int activeNavSection: 0 // 0: All Tracks, 1: Albums, 2: Artists, 3: Genres, 4: Now Playing
+    property int activeNavSection: bridge.activeNavSection // 0: All Tracks, 1: Albums, 2: Artists, 3: Genres, 4: Now Playing, 5: Playlist
     property string activeLetterFilter: "All"
     property string selectedGenreFilter: "All"
     property string selectedArtistFilter: "All"
     property int rightPanelTab: 0 // 0: Properties, 1: Queue
-    property string activePlaylistName: ""
+    property string activePlaylistName: bridge.activePlaylistName
+
+    onShowLeftPanelChanged: bridge.showLeftPanel = showLeftPanel
+    onShowRightPanelChanged: bridge.showRightPanel = showRightPanel
+    onShowColumnBrowserChanged: bridge.showColumnBrowser = showColumnBrowser
+    onMainViewModeChanged: bridge.activeWorkspaceViewMode = mainViewMode
+    onActiveNavSectionChanged: bridge.activeNavSection = activeNavSection
+    onActivePlaylistNameChanged: bridge.activePlaylistName = activePlaylistName
+
+    Component.onCompleted: {
+        var geom = bridge.loadWindowGeometry(root.width, root.height);
+        if (geom && geom.valid) {
+            root.x = geom.x;
+            root.y = geom.y;
+            root.width = geom.width;
+            root.height = geom.height;
+            if (geom.maximized) {
+                root.visibility = Window.Maximized;
+            }
+        }
+        root.showLeftPanel = bridge.showLeftPanel;
+        root.showRightPanel = bridge.showRightPanel;
+        root.showColumnBrowser = bridge.showColumnBrowser;
+        root.mainViewMode = bridge.activeWorkspaceViewMode;
+        root.activeNavSection = bridge.activeNavSection;
+        root.activePlaylistName = bridge.activePlaylistName;
+        if (root.activePlaylistName && root.activePlaylistName.length > 0) {
+            bridge.openPlaylist(root.activePlaylistName);
+        }
+    }
+
+    onClosing: (close) => {
+        if (!isMiniPlayer && visibility !== Window.Minimized) {
+            var isMax = (visibility === Window.Maximized);
+            bridge.saveWindowGeometry(root.x, root.y, root.width, root.height, isMax);
+        }
+        bridge.showLeftPanel = root.showLeftPanel;
+        bridge.showRightPanel = root.showRightPanel;
+        bridge.showColumnBrowser = root.showColumnBrowser;
+        bridge.activeWorkspaceViewMode = root.mainViewMode;
+        bridge.activeNavSection = root.activeNavSection;
+        bridge.activePlaylistName = root.activePlaylistName;
+        bridge.savePlaybackSession();
+    }
 
     // Focus isolation state
     readonly property bool isAnyDialogOpen: preferencesDialog.visible || tagEditorDialog.visible || openUrlDialog.visible || shortcutsDialog.visible || diagnosticsDialog.visible || aboutDialog.visible || sleepTimerDialog.visible || newPlaylistDialog.visible || renamePlaylistDialog.visible || deleteConfirmDialog.visible
@@ -816,12 +859,37 @@ ApplicationWindow {
                 onRequestExplorerContextMenu: explorerContextMenu.popup()
             }
 
-            // 1px vertical divider
-            Rectangle {
-                Layout.preferredWidth: 1
+            // Resizable splitter divider: Left Library Explorer sidebar
+            Item {
+                Layout.preferredWidth: 5
                 Layout.fillHeight: true
-                color: Theme.panelBorder
-                visible: showLeftPanel
+                visible: root.showLeftPanel
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 1
+                    height: parent.height
+                    color: leftSplitMouse.containsMouse ? Theme.accent : Theme.panelBorder
+                }
+
+                MouseArea {
+                    id: leftSplitMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.SplitHCursor
+                    property int startX: 0
+                    property int startWidth: 0
+                    onPressed: (mouse) => {
+                        startX = mouse.x;
+                        startWidth = bridge.leftPanelWidth;
+                    }
+                    onPositionChanged: (mouse) => {
+                        if (pressed) {
+                            bridge.leftPanelWidth = startWidth + (mouse.x - startX);
+                        }
+                    }
+                    onDoubleClicked: bridge.leftPanelWidth = 210
+                }
             }
 
             // Center panel
@@ -861,6 +929,39 @@ ApplicationWindow {
                         }
                         onRequestSwitchToExpandedView: (title, artist) => {
                             root.switchToExpandedView(title, artist);
+                        }
+                    }
+
+                    // Resizable splitter divider: 3-Column Filter Browser height
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 5
+                        visible: root.showColumnBrowser
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: parent.width
+                            height: 1
+                            color: colSplitMouse.containsMouse ? Theme.accent : Theme.panelBorder
+                        }
+
+                        MouseArea {
+                            id: colSplitMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.SplitVCursor
+                            property int startY: 0
+                            property int startHeight: 0
+                            onPressed: (mouse) => {
+                                startY = mouse.y;
+                                startHeight = bridge.columnBrowserHeight;
+                            }
+                            onPositionChanged: (mouse) => {
+                                if (pressed) {
+                                    bridge.columnBrowserHeight = startHeight + (mouse.y - startY);
+                                }
+                            }
+                            onDoubleClicked: bridge.columnBrowserHeight = 121
                         }
                     }
 
@@ -966,12 +1067,37 @@ ApplicationWindow {
                 }
             }
 
-            // 1px vertical divider
-            Rectangle {
-                Layout.preferredWidth: 1
+            // Resizable splitter divider: Right Inspector panel
+            Item {
+                Layout.preferredWidth: 5
                 Layout.fillHeight: true
-                color: Theme.panelBorder
-                visible: showRightPanel
+                visible: root.showRightPanel
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 1
+                    height: parent.height
+                    color: rightSplitMouse.containsMouse ? Theme.accent : Theme.panelBorder
+                }
+
+                MouseArea {
+                    id: rightSplitMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.SplitHCursor
+                    property int startX: 0
+                    property int startWidth: 0
+                    onPressed: (mouse) => {
+                        startX = mouse.x;
+                        startWidth = bridge.rightPanelWidth;
+                    }
+                    onPositionChanged: (mouse) => {
+                        if (pressed) {
+                            bridge.rightPanelWidth = startWidth - (mouse.x - startX);
+                        }
+                    }
+                    onDoubleClicked: bridge.rightPanelWidth = 270
+                }
             }
 
             // Right panel

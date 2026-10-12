@@ -16,7 +16,7 @@ Rectangle {
     signal requestSwitchToExpandedView(string title, string artist)
 
     Layout.fillWidth: true
-    Layout.preferredHeight: showBrowser ? 121 : 0
+    Layout.preferredHeight: showBrowser ? bridge.columnBrowserHeight : 0
     visible: showBrowser
     color: Theme.background
     clip: true

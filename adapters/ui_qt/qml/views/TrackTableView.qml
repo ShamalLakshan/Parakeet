@@ -24,6 +24,7 @@ Item {
             property string colKey: ""
             property string colTitle: ""
             property string headerText: ""
+            property int colIndex: 0
             property bool isFillWidth: false
 
             visible: bridge.isColumnVisible(colKey)
@@ -42,7 +43,7 @@ Item {
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 4
-                anchors.rightMargin: 4
+                anchors.rightMargin: 8
                 spacing: 4
 
                 Text {
@@ -67,17 +68,79 @@ Item {
             MouseArea {
                 id: hCellMouse
                 anchors.fill: parent
+                anchors.rightMargin: 6
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
+                property int dragStartX: 0
+                property bool isDragging: false
+
+                onPressed: (mouse) => {
+                    dragStartX = mouse.x;
+                    isDragging = false;
+                }
+
+                onPositionChanged: (mouse) => {
+                    if (pressed && (mouse.buttons & Qt.LeftButton)) {
+                        var dx = mouse.x - dragStartX;
+                        if (Math.abs(dx) > 10) {
+                            isDragging = true;
+                        }
+                        var cellW = Math.max(30, cellRoot.width);
+                        if (dx > cellW && cellRoot.colIndex < bridge.tableColumnKeys.length - 1) {
+                            bridge.moveColumn(cellRoot.colIndex, cellRoot.colIndex + 1);
+                            dragStartX = mouse.x;
+                        } else if (dx < -cellW && cellRoot.colIndex > 0) {
+                            bridge.moveColumn(cellRoot.colIndex, cellRoot.colIndex - 1);
+                            dragStartX = mouse.x;
+                        }
+                    }
+                }
+
                 onClicked: (mouse) => {
                     if (mouse.button === Qt.RightButton) {
                         root.requestColumnHeaderContextMenu(cellRoot.colKey, cellRoot.colTitle);
-                    } else {
+                    } else if (!isDragging) {
                         bridge.trackModel.toggleSort(cellRoot.colKey);
                     }
                 }
                 onDoubleClicked: bridge.autoSizeColumn(cellRoot.colKey)
+            }
+
+            // Right-edge resize handle
+            Item {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: 6
+                z: 10
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 1
+                    height: parent.height
+                    color: resizeMouse.containsMouse ? Theme.accent : Theme.panelBorder
+                }
+
+                MouseArea {
+                    id: resizeMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.SplitHCursor
+                    property int startX: 0
+                    property int startW: 0
+                    onPressed: (mouse) => {
+                        startX = mouse.x;
+                        startW = bridge.getColumnWidth(cellRoot.colKey);
+                    }
+                    onPositionChanged: (mouse) => {
+                        if (pressed) {
+                            var newW = Math.max(25, startW + (mouse.x - startX));
+                            bridge.setColumnWidth(cellRoot.colKey, newW);
+                        }
+                    }
+                    onDoubleClicked: bridge.autoSizeColumn(cellRoot.colKey)
+                }
             }
         }
 
@@ -104,24 +167,16 @@ Item {
                 anchors.rightMargin: 10
                 spacing: 8
 
-                TableHeaderCell { colKey: "trackNumber"; colTitle: "Track #"; headerText: "#" }
-                Item { Layout.preferredWidth: 16; Layout.fillHeight: true }
-                TableHeaderCell { colKey: "title"; colTitle: "Title"; headerText: "TITLE"; isFillWidth: true }
-                TableHeaderCell { colKey: "artist"; colTitle: "Artist"; headerText: "ARTIST" }
-                TableHeaderCell { colKey: "album"; colTitle: "Album"; headerText: "ALBUM" }
-                TableHeaderCell { colKey: "albumArtist"; colTitle: "Album Artist"; headerText: "ALBUM ARTIST" }
-                TableHeaderCell { colKey: "genre"; colTitle: "Genre"; headerText: "GENRE" }
-                TableHeaderCell { colKey: "year"; colTitle: "Year"; headerText: "YEAR" }
-                TableHeaderCell { colKey: "codec"; colTitle: "Format / Codec"; headerText: "FORMAT" }
-                TableHeaderCell { colKey: "bitrate"; colTitle: "Bitrate"; headerText: "BITRATE" }
-                TableHeaderCell { colKey: "sampleRate"; colTitle: "Sample Rate"; headerText: "SAMPLE RATE" }
-                TableHeaderCell { colKey: "bitDepth"; colTitle: "Bit Depth"; headerText: "BIT DEPTH" }
-                TableHeaderCell { colKey: "playCount"; colTitle: "Play Count"; headerText: "PLAYS" }
-                TableHeaderCell { colKey: "rating"; colTitle: "Rating"; headerText: "RATING" }
-                TableHeaderCell { colKey: "dateAdded"; colTitle: "Date Added"; headerText: "DATE ADDED" }
-                TableHeaderCell { colKey: "filePath"; colTitle: "File Path"; headerText: "FILE PATH" }
-                TableHeaderCell { colKey: "fileSize"; colTitle: "File Size"; headerText: "SIZE" }
-                TableHeaderCell { colKey: "duration"; colTitle: "Duration"; headerText: "TIME" }
+                Repeater {
+                    model: bridge.tableColumnKeys
+                    delegate: TableHeaderCell {
+                        colKey: modelData
+                        colIndex: index
+                        colTitle: bridge.tableColumns[modelData] ? bridge.tableColumns[modelData].title : ""
+                        headerText: bridge.tableColumns[modelData] ? bridge.tableColumns[modelData].header : ""
+                        isFillWidth: modelData === "title"
+                    }
+                }
             }
         }
 
@@ -152,9 +207,31 @@ Item {
                 }
 
                 delegate: Rectangle {
+                    id: rowRect
                     width: trackTableListView.width
-                    height: 25
+                    height: bridge.tableRowHeight > 0 ? bridge.tableRowHeight : 25
                     color: model.isSelected ? Theme.selection : ((bridge.currentFilePath === model.filePath) ? Theme.surfaceElevated : (tableRowMouse.containsMouse ? Theme.surfaceElevated : (index % 2 === 0 ? Theme.surface : Theme.background)))
+
+                    property string rowId: model.id
+                    property string rowTitle: model.title
+                    property string rowArtist: model.artist
+                    property string rowAlbum: model.album
+                    property string rowAlbumArtist: model.albumArtist || model.artist
+                    property string rowGenre: model.genre
+                    property int rowYear: model.year
+                    property int rowTrackNumber: model.trackNumber
+                    property string rowCodec: model.codec
+                    property int rowBitrate: model.bitrate
+                    property int rowSampleRate: model.sampleRate
+                    property int rowBitDepth: model.bitDepth
+                    property int rowPlayCount: model.playCount
+                    property int rowRating: model.rating
+                    property string rowDateAddedFormatted: model.dateAddedFormatted || ""
+                    property string rowFilePath: model.filePath
+                    property string rowFileSizeFormatted: model.fileSizeFormatted || ""
+                    property string rowDurationFormatted: model.durationFormatted
+                    property int rowIndex: index
+                    property bool rowIsSelected: model.isSelected
 
                     RowLayout {
                         anchors.fill: parent
@@ -162,311 +239,225 @@ Item {
                         anchors.rightMargin: 10
                         spacing: 8
 
-                        // 1. Track Number
-                        Item {
-                            visible: bridge.isColumnVisible("trackNumber")
-                            Layout.preferredWidth: bridge.getColumnWidth("trackNumber")
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: model.trackNumber > 0 ? model.trackNumber : (index + 1)
-                                font.pixelSize: 10
-                                color: (bridge.currentFilePath === model.filePath) ? Theme.accent : Theme.textMuted
-                            }
-                        }
+                        Repeater {
+                            model: bridge.tableColumnKeys
+                            delegate: Item {
+                                id: cellItem
+                                property string colKey: modelData
+                                visible: bridge.isColumnVisible(colKey)
+                                Layout.preferredWidth: bridge.getColumnWidth(colKey)
+                                Layout.minimumWidth: colKey === "title" ? 100 : (colKey === "artist" || colKey === "album" ? 70 : 30)
+                                Layout.fillWidth: colKey === "title"
+                                Layout.fillHeight: true
+                                clip: true
 
-                        // 2. Play/Volume Status Icon
-                        Item {
-                            Layout.preferredWidth: 16
-                            Layout.fillHeight: true
-                            VectorIcon {
-                                anchors.centerIn: parent
-                                visible: bridge.currentFilePath === model.filePath
-                                name: bridge.isPlaying ? "volume" : "play"
-                                width: 10
-                                height: 10
-                                color: Theme.accent
-                            }
-                        }
-
-                        // 3. Title
-                        Item {
-                            visible: bridge.isColumnVisible("title")
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: bridge.getColumnWidth("title")
-                            Layout.minimumWidth: 100
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                text: model.title
-                                font.pixelSize: 11
-                                font.bold: (bridge.currentFilePath === model.filePath)
-                                color: (bridge.currentFilePath === model.filePath) ? Theme.textPrimary : Theme.textSecondary
-                                elide: Text.ElideRight
-                            }
-                        }
-
-                        // 4. Artist
-                        Item {
-                            visible: bridge.isColumnVisible("artist")
-                            Layout.preferredWidth: bridge.getColumnWidth("artist")
-                            Layout.minimumWidth: 70
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                text: model.artist
-                                font.pixelSize: 11
-                                color: (bridge.currentFilePath === model.filePath) ? Theme.textSecondary : Theme.textMuted
-                                elide: Text.ElideRight
-                            }
-                        }
-
-                        // 5. Album
-                        Item {
-                            visible: bridge.isColumnVisible("album")
-                            Layout.preferredWidth: bridge.getColumnWidth("album")
-                            Layout.minimumWidth: 70
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                id: albRowText
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                text: model.album
-                                font.pixelSize: 11
-                                font.underline: albTextMouse.containsMouse
-                                color: albTextMouse.containsMouse ? Theme.accentHover : Theme.textMuted
-                                elide: Text.ElideRight
-                            }
-                            MouseArea {
-                                id: albTextMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    root.requestExpandAlbum(model.album, model.artist);
+                                // 1. Track Number
+                                RowLayout {
+                                    anchors.fill: parent
+                                    spacing: 4
+                                    visible: cellItem.colKey === "trackNumber"
+                                    Text {
+                                        text: rowRect.rowTrackNumber > 0 ? rowRect.rowTrackNumber : (rowRect.rowIndex + 1)
+                                        font.pixelSize: 10
+                                        color: (bridge.currentFilePath === rowRect.rowFilePath) ? Theme.accent : Theme.textMuted
+                                        verticalAlignment: Text.AlignVCenter
+                                        Layout.fillWidth: true
+                                    }
+                                    VectorIcon {
+                                        visible: bridge.currentFilePath === rowRect.rowFilePath
+                                        name: bridge.isPlaying ? "volume" : "play"
+                                        width: 10
+                                        height: 10
+                                        color: Theme.accent
+                                        Layout.alignment: Qt.AlignVCenter
+                                    }
                                 }
-                                ToolTip.visible: albTextMouse.containsMouse
-                                ToolTip.text: "Expand " + model.album
-                            }
-                        }
 
-                        // 6. Album Artist
-                        Item {
-                            visible: bridge.isColumnVisible("albumArtist")
-                            Layout.preferredWidth: bridge.getColumnWidth("albumArtist")
-                            Layout.minimumWidth: 70
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                text: model.albumArtist || model.artist
-                                font.pixelSize: 11
-                                color: Theme.textMuted
-                                elide: Text.ElideRight
-                            }
-                        }
+                                // 2. Title
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    visible: cellItem.colKey === "title"
+                                    text: rowRect.rowTitle
+                                    font.pixelSize: 11
+                                    font.bold: (bridge.currentFilePath === rowRect.rowFilePath)
+                                    color: (bridge.currentFilePath === rowRect.rowFilePath) ? Theme.textPrimary : Theme.textSecondary
+                                    elide: Text.ElideRight
+                                }
 
-                        // 7. Genre
-                        Item {
-                            visible: bridge.isColumnVisible("genre")
-                            Layout.preferredWidth: bridge.getColumnWidth("genre")
-                            Layout.minimumWidth: 50
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                text: model.genre
-                                font.pixelSize: 10
-                                color: Theme.textMuted
-                                elide: Text.ElideRight
-                            }
-                        }
+                                // 3. Artist
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    visible: cellItem.colKey === "artist"
+                                    text: rowRect.rowArtist
+                                    font.pixelSize: 11
+                                    color: (bridge.currentFilePath === rowRect.rowFilePath) ? Theme.textSecondary : Theme.textMuted
+                                    elide: Text.ElideRight
+                                }
 
-                        // 8. Year
-                        Item {
-                            visible: bridge.isColumnVisible("year")
-                            Layout.preferredWidth: bridge.getColumnWidth("year")
-                            Layout.minimumWidth: 36
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: model.year > 0 ? model.year : ""
-                                font.pixelSize: 10
-                                color: Theme.textMuted
-                            }
-                        }
+                                // 4. Album
+                                Item {
+                                    anchors.fill: parent
+                                    visible: cellItem.colKey === "album"
+                                    Text {
+                                        id: albRowText
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        text: rowRect.rowAlbum
+                                        font.pixelSize: 11
+                                        font.underline: albTextMouse.containsMouse
+                                        color: albTextMouse.containsMouse ? Theme.accentHover : Theme.textMuted
+                                        elide: Text.ElideRight
+                                    }
+                                    MouseArea {
+                                        id: albTextMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            root.requestExpandAlbum(rowRect.rowAlbum, rowRect.rowArtist);
+                                        }
+                                        ToolTip.visible: albTextMouse.containsMouse
+                                        ToolTip.text: "Expand " + rowRect.rowAlbum
+                                    }
+                                }
 
-                        // 9. Format / Codec
-                        Item {
-                            visible: bridge.isColumnVisible("codec")
-                            Layout.preferredWidth: bridge.getColumnWidth("codec")
-                            Layout.minimumWidth: 46
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: model.codec + (model.bitDepth > 16 ? " " + model.bitDepth + "b" : "")
-                                font.pixelSize: 10
-                                font.weight: Font.Medium
-                                color: Theme.textSecondary
-                                elide: Text.ElideRight
-                            }
-                        }
+                                // 5. Album Artist
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    visible: cellItem.colKey === "albumArtist"
+                                    text: rowRect.rowAlbumArtist
+                                    font.pixelSize: 11
+                                    color: Theme.textMuted
+                                    elide: Text.ElideRight
+                                }
 
-                        // 10. Bitrate
-                        Item {
-                            visible: bridge.isColumnVisible("bitrate")
-                            Layout.preferredWidth: bridge.getColumnWidth("bitrate")
-                            Layout.minimumWidth: 40
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: model.bitrate > 0 ? model.bitrate + " kbps" : ""
-                                font.pixelSize: 10
-                                color: Theme.textMuted
-                                elide: Text.ElideRight
-                            }
-                        }
+                                // 6. Genre
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    visible: cellItem.colKey === "genre"
+                                    text: rowRect.rowGenre
+                                    font.pixelSize: 10
+                                    color: Theme.textMuted
+                                    elide: Text.ElideRight
+                                }
 
-                        // 11. Sample Rate
-                        Item {
-                            visible: bridge.isColumnVisible("sampleRate")
-                            Layout.preferredWidth: bridge.getColumnWidth("sampleRate")
-                            Layout.minimumWidth: 50
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: model.sampleRate > 0 ? ((model.sampleRate / 1000) + " kHz") : ""
-                                font.pixelSize: 10
-                                color: Theme.textMuted
-                                elide: Text.ElideRight
-                            }
-                        }
+                                // 7. Year
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: cellItem.colKey === "year"
+                                    text: rowRect.rowYear > 0 ? rowRect.rowYear : ""
+                                    font.pixelSize: 10
+                                    color: Theme.textMuted
+                                }
 
-                        // 12. Bit Depth
-                        Item {
-                            visible: bridge.isColumnVisible("bitDepth")
-                            Layout.preferredWidth: bridge.getColumnWidth("bitDepth")
-                            Layout.minimumWidth: 40
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: model.bitDepth > 0 ? (model.bitDepth + "-bit") : ""
-                                font.pixelSize: 10
-                                color: Theme.textMuted
-                                elide: Text.ElideRight
-                            }
-                        }
+                                // 8. Codec
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: cellItem.colKey === "codec"
+                                    text: rowRect.rowCodec + (rowRect.rowBitDepth > 16 ? " " + rowRect.rowBitDepth + "b" : "")
+                                    font.pixelSize: 10
+                                    font.weight: Font.Medium
+                                    color: Theme.textSecondary
+                                    elide: Text.ElideRight
+                                }
 
-                        // 13. Play Count
-                        Item {
-                            visible: bridge.isColumnVisible("playCount")
-                            Layout.preferredWidth: bridge.getColumnWidth("playCount")
-                            Layout.minimumWidth: 36
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: model.playCount > 0 ? model.playCount : ""
-                                font.pixelSize: 10
-                                color: Theme.textMuted
-                            }
-                        }
+                                // 9. Bitrate
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: cellItem.colKey === "bitrate"
+                                    text: rowRect.rowBitrate > 0 ? rowRect.rowBitrate + " kbps" : ""
+                                    font.pixelSize: 10
+                                    color: Theme.textMuted
+                                    elide: Text.ElideRight
+                                }
 
-                        // 14. Rating
-                        Item {
-                            visible: bridge.isColumnVisible("rating")
-                            Layout.preferredWidth: bridge.getColumnWidth("rating")
-                            Layout.minimumWidth: 50
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: model.rating > 0 ? ("★".repeat(model.rating) + "☆".repeat(5 - model.rating)) : ""
-                                font.pixelSize: 10
-                                color: Theme.accent
-                            }
-                        }
+                                // 10. Sample Rate
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: cellItem.colKey === "sampleRate"
+                                    text: rowRect.rowSampleRate > 0 ? ((rowRect.rowSampleRate / 1000) + " kHz") : ""
+                                    font.pixelSize: 10
+                                    color: Theme.textMuted
+                                    elide: Text.ElideRight
+                                }
 
-                        // 15. Date Added
-                        Item {
-                            visible: bridge.isColumnVisible("dateAdded")
-                            Layout.preferredWidth: bridge.getColumnWidth("dateAdded")
-                            Layout.minimumWidth: 60
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: model.dateAddedFormatted || ""
-                                font.pixelSize: 10
-                                color: Theme.textMuted
-                                elide: Text.ElideRight
-                            }
-                        }
+                                // 11. Bit Depth
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: cellItem.colKey === "bitDepth"
+                                    text: rowRect.rowBitDepth > 0 ? (rowRect.rowBitDepth + "-bit") : ""
+                                    font.pixelSize: 10
+                                    color: Theme.textMuted
+                                    elide: Text.ElideRight
+                                }
 
-                        // 16. File Path
-                        Item {
-                            visible: bridge.isColumnVisible("filePath")
-                            Layout.preferredWidth: bridge.getColumnWidth("filePath")
-                            Layout.minimumWidth: 80
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                text: model.filePath || ""
-                                font.pixelSize: 10
-                                color: Theme.textMuted
-                                elide: Text.ElideMiddle
-                            }
-                        }
+                                // 12. Play Count
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: cellItem.colKey === "playCount"
+                                    text: rowRect.rowPlayCount > 0 ? rowRect.rowPlayCount : ""
+                                    font.pixelSize: 10
+                                    color: Theme.textMuted
+                                }
 
-                        // 17. File Size
-                        Item {
-                            visible: bridge.isColumnVisible("fileSize")
-                            Layout.preferredWidth: bridge.getColumnWidth("fileSize")
-                            Layout.minimumWidth: 40
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: model.fileSizeFormatted || ""
-                                font.pixelSize: 10
-                                color: Theme.textMuted
-                                elide: Text.ElideRight
-                            }
-                        }
+                                // 13. Rating
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: cellItem.colKey === "rating"
+                                    text: rowRect.rowRating > 0 ? ("★".repeat(rowRect.rowRating) + "☆".repeat(5 - rowRect.rowRating)) : ""
+                                    font.pixelSize: 10
+                                    color: Theme.accent
+                                }
 
-                        // 18. Duration
-                        Item {
-                            visible: bridge.isColumnVisible("duration")
-                            Layout.preferredWidth: bridge.getColumnWidth("duration")
-                            Layout.minimumWidth: 36
-                            Layout.fillHeight: true
-                            clip: true
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: model.durationFormatted
-                                font.pixelSize: 10
-                                color: Theme.textMuted
+                                // 14. Date Added
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: cellItem.colKey === "dateAdded"
+                                    text: rowRect.rowDateAddedFormatted
+                                    font.pixelSize: 10
+                                    color: Theme.textMuted
+                                    elide: Text.ElideRight
+                                }
+
+                                // 15. File Path
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    visible: cellItem.colKey === "filePath"
+                                    text: rowRect.rowFilePath
+                                    font.pixelSize: 10
+                                    color: Theme.textMuted
+                                    elide: Text.ElideMiddle
+                                }
+
+                                // 16. File Size
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: cellItem.colKey === "fileSize"
+                                    text: rowRect.rowFileSizeFormatted
+                                    font.pixelSize: 10
+                                    color: Theme.textMuted
+                                    elide: Text.ElideRight
+                                }
+
+                                // 17. Duration
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: cellItem.colKey === "duration"
+                                    text: rowRect.rowDurationFormatted
+                                    font.pixelSize: 10
+                                    color: Theme.textMuted
+                                }
                             }
                         }
                     }
@@ -479,33 +470,33 @@ Item {
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onDoubleClicked: {
                             if (bridge.doubleClickAction === "Play Next") {
-                                bridge.playNext(model.id);
+                                bridge.playNext(rowRect.rowId);
                             } else if (bridge.doubleClickAction === "Queue Last") {
-                                bridge.queueLast(model.id);
+                                bridge.queueLast(rowRect.rowId);
                             } else {
-                                bridge.playTrackAtIndex(index);
+                                bridge.playTrackAtIndex(rowRect.rowIndex);
                             }
                         }
                         onClicked: (mouse) => {
                             if (mouse.button === Qt.RightButton) {
-                                if (!model.isSelected) {
+                                if (!rowRect.rowIsSelected) {
                                     bridge.trackModel.clearSelection();
-                                    bridge.trackModel.setRowSelected(index, true);
+                                    bridge.trackModel.setRowSelected(rowRect.rowIndex, true);
                                 }
                                 var sel = bridge.trackModel.getSelectedTracks();
-                                var trk = { id: model.id, title: model.title, artist: model.artist, filePath: model.filePath, album: model.album, genre: model.genre, year: model.year, trackNumber: model.trackNumber };
-                                root.requestTrackContextMenu(sel, trk, model.filePath, model.title, model.artist, root.isPlaylistView, root.activePlaylistName);
+                                var trk = { id: rowRect.rowId, title: rowRect.rowTitle, artist: rowRect.rowArtist, filePath: rowRect.rowFilePath, album: rowRect.rowAlbum, genre: rowRect.rowGenre, year: rowRect.rowYear, trackNumber: rowRect.rowTrackNumber };
+                                root.requestTrackContextMenu(sel, trk, rowRect.rowFilePath, rowRect.rowTitle, rowRect.rowArtist, root.isPlaylistView, root.activePlaylistName);
                             } else {
                                 if (mouse.modifiers & Qt.ControlModifier) {
-                                    bridge.trackModel.toggleSelection(index);
+                                    bridge.trackModel.toggleSelection(rowRect.rowIndex);
                                 } else if (mouse.modifiers & Qt.ShiftModifier) {
-                                    bridge.trackModel.selectRange(trackTableListView.currentIndex >= 0 ? trackTableListView.currentIndex : 0, index);
+                                    bridge.trackModel.selectRange(trackTableListView.currentIndex >= 0 ? trackTableListView.currentIndex : 0, rowRect.rowIndex);
                                 } else {
                                     bridge.trackModel.clearSelection();
-                                    bridge.trackModel.setRowSelected(index, true);
-                                    trackTableListView.currentIndex = index;
+                                    bridge.trackModel.setRowSelected(rowRect.rowIndex, true);
+                                    trackTableListView.currentIndex = rowRect.rowIndex;
                                 }
-                                bridge.openAlbumDetails(model.album, model.artist);
+                                bridge.openAlbumDetails(rowRect.rowAlbum, rowRect.rowArtist);
                             }
                         }
                     }

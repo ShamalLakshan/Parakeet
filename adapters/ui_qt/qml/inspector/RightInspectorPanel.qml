@@ -10,7 +10,7 @@ Rectangle {
     property int currentTab: 0
     signal tabChanged(int tab)
 
-    Layout.preferredWidth: 270
+    Layout.preferredWidth: bridge.rightPanelWidth
     Layout.fillHeight: true
     color: Theme.surface
 

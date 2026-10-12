@@ -19,7 +19,7 @@ Rectangle {
     signal requestPlaylistContextMenu(string playlistName, bool isSmart)
     signal requestExplorerContextMenu()
 
-    Layout.preferredWidth: 210
+    Layout.preferredWidth: bridge.leftPanelWidth
     Layout.fillHeight: true
     color: Theme.surface
 
