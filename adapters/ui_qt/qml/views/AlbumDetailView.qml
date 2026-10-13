@@ -187,7 +187,7 @@ Item {
 
                         Image {
                             anchors.fill: parent
-                            source: "image://albumart/" + (bridge.selectedAlbumArtHash ? bridge.selectedAlbumArtHash : "default")
+                            source: "image://albumart/" + (bridge.selectedAlbumArtHash ? bridge.selectedAlbumArtHash : ("alb_" + bridge.selectedAlbumTitle + "_" + bridge.selectedAlbumArtist))
                             fillMode: Image.PreserveAspectCrop
                         }
 

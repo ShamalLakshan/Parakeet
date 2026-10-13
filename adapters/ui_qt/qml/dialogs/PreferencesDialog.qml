@@ -2480,6 +2480,38 @@ Dialog {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
 
+                    // Album Grouping & Featuring Artists
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Group Albums with Guest/Featuring Artists"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.bold: true
+                                color: Theme.textPrimary
+                            }
+                            Text {
+                                text: "Keep albums with guest or featuring artists unified into a single album card instead of splitting them by artist combinations."
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        StyledCheckBox {
+                            text: "Unified"
+                            checked: bridge.groupAlbumsByTitle
+                            onToggled: bridge.setGroupAlbumsByTitle(checked)
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.panelBorder }
+
                     // Maintenance Operations
                     Text {
                         text: "Library Maintenance & Database Utilities"

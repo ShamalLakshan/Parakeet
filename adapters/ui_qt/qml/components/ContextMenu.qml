@@ -685,6 +685,16 @@ Menu {
         onTriggered: bridge.clearLibrary()
     }
 
+    ContextMenuSeparator {
+        visible: root.menuType === "explorer"
+    }
+
+    ContextMenuItem {
+        text: (bridge.groupAlbumsByTitle ? "Disable" : "Enable") + " Guest Artist Album Grouping"
+        visible: root.menuType === "explorer"
+        onTriggered: bridge.setGroupAlbumsByTitle(!bridge.groupAlbumsByTitle)
+    }
+
     // --- Album Cards Context Menu (Issue #12) ---
 
     ContextMenuItem {
@@ -771,6 +781,16 @@ Menu {
         text: "Extract / Save Embedded Artwork to Disk..."
         visible: root.menuType === "album"
         onTriggered: root.exportArtworkRequested(root.targetAlbumTitle, root.targetAlbumArtist)
+    }
+
+    ContextMenuSeparator {
+        visible: root.menuType === "album"
+    }
+
+    ContextMenuItem {
+        text: bridge.groupAlbumsByTitle ? "Split Albums by Artist Combinations" : "Group Albums with Guest/Featuring Artists"
+        visible: root.menuType === "album"
+        onTriggered: bridge.setGroupAlbumsByTitle(!bridge.groupAlbumsByTitle)
     }
 
     // --- Left Library Explorer: Monitored Folders (Issue #12) ---

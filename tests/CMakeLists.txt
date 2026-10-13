@@ -6,12 +6,15 @@ add_executable(parakeet_tests
     test_queue_service.cpp
     test_theme_loader.cpp
     test_settings.cpp
+    test_metadata_art.cpp
 )
 
 target_include_directories(parakeet_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${GTEST_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/core/include
+    ${CMAKE_SOURCE_DIR}/adapters
     ${CMAKE_SOURCE_DIR}/adapters/ui_qt
     ${CMAKE_SOURCE_DIR}/adapters/ui_qt/theming
 )

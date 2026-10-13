@@ -62,6 +62,10 @@ public:
   std::optional<core::Album> getAlbumById(const std::string &) override {
     return std::nullopt;
   }
+  void setGroupAlbumsByTitle(bool enabled) override {
+    m_groupAlbumsByTitle = enabled;
+  }
+  bool groupAlbumsByTitle() const override { return m_groupAlbumsByTitle; }
   bool clearLibrary() override {
     tracks.clear();
     return true;
@@ -69,6 +73,9 @@ public:
   bool optimizeDatabase() override { return true; }
   size_t getTrackCount() override { return tracks.size(); }
   size_t getAlbumCount() override { return 0; }
+
+private:
+  bool m_groupAlbumsByTitle{true};
 };
 
 class MockExtractor : public core::IMetadataExtractor {
@@ -332,6 +339,15 @@ TEST_F(SettingsTest, LibrarySettingsGettersAndSetters) {
   EXPECT_EQ(bridge.excludeFolders(), ".*, temp, build");
   bridge.setArtworkPriority("External Folder Art First");
   EXPECT_EQ(bridge.artworkPriority(), "External Folder Art First");
+
+  // Album Grouping By Title
+  EXPECT_TRUE(bridge.groupAlbumsByTitle());
+  bridge.setGroupAlbumsByTitle(false);
+  EXPECT_FALSE(bridge.groupAlbumsByTitle());
+  EXPECT_FALSE(db.groupAlbumsByTitle());
+  bridge.setGroupAlbumsByTitle(true);
+  EXPECT_TRUE(bridge.groupAlbumsByTitle());
+  EXPECT_TRUE(db.groupAlbumsByTitle());
 
   // Database maintenance
   bridge.optimizeDatabase();

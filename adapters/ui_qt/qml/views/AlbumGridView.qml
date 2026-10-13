@@ -42,7 +42,7 @@ ScrollView {
 
                     Image {
                         anchors.fill: parent
-                        source: "image://albumart/" + (model.artHash ? model.artHash : "default")
+                        source: "image://albumart/" + (model.artHash ? model.artHash : model.id)
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                     }

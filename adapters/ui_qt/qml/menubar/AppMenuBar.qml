@@ -300,6 +300,13 @@ RowLayout {
                     checked: root.mainViewMode === 3
                     onTriggered: root.requestSwitchViewMode(3)
                 }
+                MenuSeparator {}
+                MenuItem {
+                    text: "Group Albums with Guest/Featuring Artists"
+                    checkable: true
+                    checked: bridge.groupAlbumsByTitle
+                    onTriggered: bridge.setGroupAlbumsByTitle(!bridge.groupAlbumsByTitle)
+                }
             }
             MenuItem {
                 text: (root.isMiniPlayer ? "Restore Full Player" : "Mini-Player Mode") + " (Ctrl+Shift+M / F10)"
@@ -583,6 +590,12 @@ RowLayout {
             MenuItem {
                 text: "Manage Monitored Folders..."
                 onTriggered: root.requestPreferences(3)
+            }
+            MenuItem {
+                text: "Group Albums with Guest/Featuring Artists"
+                checkable: true
+                checked: bridge.groupAlbumsByTitle
+                onTriggered: bridge.setGroupAlbumsByTitle(!bridge.groupAlbumsByTitle)
             }
             MenuSeparator {}
             MenuItem {

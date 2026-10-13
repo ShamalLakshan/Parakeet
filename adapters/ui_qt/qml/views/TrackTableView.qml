@@ -216,7 +216,7 @@ Item {
                     property string rowTitle: model.title
                     property string rowArtist: model.artist
                     property string rowAlbum: model.album
-                    property string rowAlbumArtist: model.albumArtist || model.artist
+                    property string rowAlbumArtist: (model.albumArtist && model.albumArtist !== "Unknown Artist") ? model.albumArtist : (model.artist || "")
                     property string rowGenre: model.genre
                     property int rowYear: model.year
                     property int rowTrackNumber: model.trackNumber

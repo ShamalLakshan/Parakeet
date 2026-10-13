@@ -138,6 +138,8 @@ void QtBridge::loadSettings() {
           .toString();
   m_artworkPriority =
       s.value("library/artworkPriority", "Embedded Tags First").toString();
+  m_groupAlbumsByTitle = s.value("library/groupAlbumsByTitle", true).toBool();
+  m_library.getDatabasePort().setGroupAlbumsByTitle(m_groupAlbumsByTitle);
 
   // General
   m_language = s.value("general/language", "System Default").toString();
@@ -264,6 +266,7 @@ void QtBridge::saveSettings() {
   s.setValue("library/formatFilters", m_formatFilters);
   s.setValue("library/excludeFolders", m_excludeFolders);
   s.setValue("library/artworkPriority", m_artworkPriority);
+  s.setValue("library/groupAlbumsByTitle", m_groupAlbumsByTitle);
 
   // General
   s.setValue("general/language", m_language);
@@ -395,6 +398,9 @@ QString QtBridge::formatBytes(uint64_t bytes) {
 
 QString QtBridge::currentArtUrl() const {
   if (m_currentArtHash.isEmpty()) {
+    if (!m_currentFilePath.isEmpty()) {
+      return "image://albumart/" + m_currentFilePath;
+    }
     return "image://albumart/default";
   }
   return "image://albumart/" + m_currentArtHash;
@@ -889,7 +895,10 @@ bool QtBridge::exportAlbumArtwork(const QString &albumTitle,
   auto tracks = m_library.getTracksForAlbum(albumTitle.toStdString(),
                                             albumArtist.toStdString());
   if (tracks.empty()) {
-    return false;
+    tracks = m_library.getTracksForAlbum(albumTitle.toStdString(), "");
+    if (tracks.empty()) {
+      return false;
+    }
   }
   QString clean = targetFilePath;
   if (clean.startsWith("file://")) {
@@ -2533,6 +2542,17 @@ void QtBridge::setArtworkPriority(const QString &priority) {
   }
 }
 
+void QtBridge::setGroupAlbumsByTitle(bool enabled) {
+  if (m_groupAlbumsByTitle != enabled) {
+    m_groupAlbumsByTitle = enabled;
+    m_library.getDatabasePort().setGroupAlbumsByTitle(enabled);
+    saveSettings();
+    emit librarySettingsChanged();
+    emit libraryStatsChanged();
+    m_albumModel->reload();
+  }
+}
+
 void QtBridge::optimizeDatabase() {
   m_library.optimizeDatabase();
   m_scanStatusText = "Database optimized (VACUUM & REINDEX complete)";
@@ -3142,6 +3162,8 @@ void QtBridge::resetAllSettingsToDefaults() {
   m_excludeFolders =
       ".*, node_modules, temp, @eaDir, System Volume Information";
   m_artworkPriority = "Embedded Tags First";
+  m_groupAlbumsByTitle = true;
+  m_library.getDatabasePort().setGroupAlbumsByTitle(true);
 
   // General defaults
   m_language = "System Default";

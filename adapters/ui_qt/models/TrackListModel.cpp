@@ -121,7 +121,10 @@ QVariant TrackListModel::data(const QModelIndex &index, int role) const {
   case AlbumRole:
     return QString::fromStdString(track.album);
   case AlbumArtistRole:
-    return QString::fromStdString(track.albumArtist);
+    if (!track.albumArtist.empty() && track.albumArtist != "Unknown Artist") {
+      return QString::fromStdString(track.albumArtist);
+    }
+    return QString::fromStdString(track.artist);
   case GenreRole:
     return QString::fromStdString(track.genre);
   case YearRole:
@@ -206,7 +209,10 @@ QVariantMap TrackListModel::getTrackAt(int index) const {
   map["title"] = QString::fromStdString(t.title);
   map["artist"] = QString::fromStdString(t.artist);
   map["album"] = QString::fromStdString(t.album);
-  map["albumArtist"] = QString::fromStdString(t.albumArtist);
+  map["albumArtist"] = QString::fromStdString(
+      (!t.albumArtist.empty() && t.albumArtist != "Unknown Artist")
+          ? t.albumArtist
+          : t.artist);
   map["year"] = t.year;
   map["genre"] = QString::fromStdString(t.genre);
   map["trackNumber"] = t.trackNumber;
@@ -233,7 +239,8 @@ QVariantMap TrackListModel::getTrackAt(int index) const {
       map["fileSizeFormatted"] = QString("%1 KB").arg(bytes / 1024);
     } else {
       double mb = static_cast<double>(bytes) / (1024.0 * 1024.0);
-      map["fileSizeFormatted"] = QString("%1 MB").arg(QString::number(mb, 'f', 1));
+      map["fileSizeFormatted"] =
+          QString("%1 MB").arg(QString::number(mb, 'f', 1));
     }
   } else {
     map["fileSizeFormatted"] = QString("");
@@ -257,8 +264,7 @@ QVariantMap TrackListModel::getTrackAt(int index) const {
   QSettings s("Parakeet", "ParakeetPlayer");
   map["playCount"] =
       s.value("playcounts/" + QString::fromStdString(t.id), 0).toInt();
-  map["rating"] =
-      s.value("ratings/" + QString::fromStdString(t.id), 0).toInt();
+  map["rating"] = s.value("ratings/" + QString::fromStdString(t.id), 0).toInt();
 
   return map;
 }
@@ -462,7 +468,8 @@ void TrackListModel::applySort() {
   if (m_sortColumn.isEmpty() || m_filteredTracks.empty())
     return;
 
-  auto compareTracks = [this](const core::Track &a, const core::Track &b) -> bool {
+  auto compareTracks = [this](const core::Track &a,
+                              const core::Track &b) -> bool {
     int cmp = 0;
     if (m_sortColumn == "trackNumber") {
       if (a.trackNumber != b.trackNumber)
@@ -550,4 +557,3 @@ void TrackListModel::applySort() {
 
   std::sort(m_filteredTracks.begin(), m_filteredTracks.end(), compareTracks);
 }
-

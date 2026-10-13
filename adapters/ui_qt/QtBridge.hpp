@@ -225,6 +225,8 @@ class QtBridge : public QObject {
                  NOTIFY librarySettingsChanged)
   Q_PROPERTY(QString artworkPriority READ artworkPriority WRITE
                  setArtworkPriority NOTIFY librarySettingsChanged)
+  Q_PROPERTY(bool groupAlbumsByTitle READ groupAlbumsByTitle WRITE
+                 setGroupAlbumsByTitle NOTIFY librarySettingsChanged)
 
   // Settings (General)
   Q_PROPERTY(
@@ -473,6 +475,7 @@ public:
   [[nodiscard]] QStringList formatFilters() const { return m_formatFilters; }
   [[nodiscard]] QString excludeFolders() const { return m_excludeFolders; }
   [[nodiscard]] QString artworkPriority() const { return m_artworkPriority; }
+  [[nodiscard]] bool groupAlbumsByTitle() const { return m_groupAlbumsByTitle; }
 
   // General Settings Getters
   [[nodiscard]] QString language() const { return m_language; }
@@ -754,6 +757,7 @@ public:
   isFormatFilterEnabled(const QString &format) const;
   Q_INVOKABLE void setExcludeFolders(const QString &patterns);
   Q_INVOKABLE void setArtworkPriority(const QString &priority);
+  Q_INVOKABLE void setGroupAlbumsByTitle(bool enabled);
   Q_INVOKABLE void exportDatabaseBackup(const QString &targetFilePath);
   Q_INVOKABLE void optimizeDatabase();
   Q_INVOKABLE bool createPlaylist(const QString &name);
@@ -1169,6 +1173,7 @@ private:
   QString m_excludeFolders{
       ".*, node_modules, temp, @eaDir, System Volume Information"};
   QString m_artworkPriority{"Embedded Tags First"};
+  bool m_groupAlbumsByTitle{true};
 
   // General Settings
   QString m_language{"System Default"};
