@@ -120,14 +120,29 @@ QPixmap AlbumArtImageProvider::requestPixmap(const QString &id, QSize *size,
         {
           std::lock_guard<std::mutex> lock(m_cacheMutex);
           m_pixmapCache[key] = pix;
+          if (!artOpt->artHash.empty()) {
+            m_pixmapCache[artOpt->artHash] = pix;
+          }
         }
         if (!m_cacheDir.isEmpty()) {
-          QString diskPath = m_cacheDir + "/" + safeDiskFileName(id) + ".jpg";
-          QFile file(diskPath);
-          if (file.open(QIODevice::WriteOnly)) {
-            file.write(reinterpret_cast<const char *>(artOpt->data.data()),
-                       static_cast<qint64>(artOpt->data.size()));
-            file.close();
+          auto writeDisk = [&](const QString &fname) {
+            if (fname.isEmpty())
+              return;
+            QString diskPath =
+                m_cacheDir + "/" + safeDiskFileName(fname) + ".jpg";
+            if (!QFile::exists(diskPath)) {
+              QFile file(diskPath);
+              if (file.open(QIODevice::WriteOnly)) {
+                file.write(reinterpret_cast<const char *>(artOpt->data.data()),
+                           static_cast<qint64>(artOpt->data.size()));
+                file.close();
+              }
+            }
+          };
+          writeDisk(id);
+          if (!artOpt->artHash.empty() &&
+              QString::fromStdString(artOpt->artHash) != id) {
+            writeDisk(QString::fromStdString(artOpt->artHash));
           }
         }
         return pix.scaled(w, h, Qt::KeepAspectRatioByExpanding,
@@ -148,6 +163,7 @@ QPixmap AlbumArtImageProvider::requestPixmap(const QString &id, QSize *size,
             (albId == key || ("alb_" + t.album + "_Unknown Artist") == key ||
              ("alb_" + t.album + "_Various Artists") == key ||
              ("alb_" + t.album + "_") == key || ("alb_" + t.album) == key ||
+             ("alb_" + t.album + "_" + t.artist) == key ||
              key.rfind("alb_" + t.album + "_", 0) == 0);
       }
 
@@ -166,13 +182,25 @@ QPixmap AlbumArtImageProvider::requestPixmap(const QString &id, QSize *size,
               }
             }
             if (!m_cacheDir.isEmpty()) {
-              QString diskPath =
-                  m_cacheDir + "/" + safeDiskFileName(id) + ".jpg";
-              QFile file(diskPath);
-              if (file.open(QIODevice::WriteOnly)) {
-                file.write(reinterpret_cast<const char *>(artOpt->data.data()),
-                           static_cast<qint64>(artOpt->data.size()));
-                file.close();
+              auto writeDisk = [&](const QString &fname) {
+                if (fname.isEmpty())
+                  return;
+                QString diskPath =
+                    m_cacheDir + "/" + safeDiskFileName(fname) + ".jpg";
+                if (!QFile::exists(diskPath)) {
+                  QFile file(diskPath);
+                  if (file.open(QIODevice::WriteOnly)) {
+                    file.write(
+                        reinterpret_cast<const char *>(artOpt->data.data()),
+                        static_cast<qint64>(artOpt->data.size()));
+                    file.close();
+                  }
+                }
+              };
+              writeDisk(id);
+              if (!artOpt->artHash.empty() &&
+                  QString::fromStdString(artOpt->artHash) != id) {
+                writeDisk(QString::fromStdString(artOpt->artHash));
               }
             }
             return pix.scaled(w, h, Qt::KeepAspectRatioByExpanding,

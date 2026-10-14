@@ -36,6 +36,14 @@ public:
 
   /** @brief Extracts embedded lyrics from an audio file if present. */
   virtual std::string extractLyrics(const std::string &filePath) { return ""; }
+
+  /**
+   * @brief Configures artwork discovery priority between embedded tags and
+   * folder files.
+   * @param preferEmbedded If true, searches embedded tags first; otherwise
+   * folder images.
+   */
+  virtual void setArtworkPriority(bool preferEmbedded) { (void)preferEmbedded; }
 };
 
 } // namespace core

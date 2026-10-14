@@ -36,6 +36,7 @@ public:
   extractArtwork(const std::string &filePath) override;
   bool supportsFormat(const std::string &extension) const override;
   std::string extractLyrics(const std::string &filePath) override;
+  void setArtworkPriority(bool preferEmbedded) override;
 
   /**
    * @brief Computes 64-bit FNV-1a hash over raw binary buffer.
@@ -66,6 +67,7 @@ private:
   std::optional<core::ExtractedArtwork>
   extractFromApe(TagLib::APE::Tag *apeTag);
 
+  bool m_preferEmbedded{true};
   std::mutex m_cacheMutex;
   std::unordered_map<std::string, std::optional<core::ExtractedArtwork>>
       m_folderArtCache;

@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Core Gui)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Quick)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTEST REQUIRED gtest gtest_main)
 
@@ -24,6 +24,7 @@ target_link_libraries(parakeet_tests PRIVATE
     ui_adapter
     Qt6::Core
     Qt6::Gui
+    Qt6::Quick
     ${GTEST_LIBRARIES}
 )
 

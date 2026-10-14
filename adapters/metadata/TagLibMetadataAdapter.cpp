@@ -33,6 +33,7 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <sstream>
 
@@ -41,6 +42,10 @@ namespace fs = std::filesystem;
 namespace adapters {
 
 TagLibMetadataAdapter::TagLibMetadataAdapter() = default;
+
+void TagLibMetadataAdapter::setArtworkPriority(bool preferEmbedded) {
+  m_preferEmbedded = preferEmbedded;
+}
 
 std::string TagLibMetadataAdapter::toLower(std::string s) {
   std::transform(s.begin(), s.end(), s.begin(),
@@ -61,9 +66,9 @@ bool TagLibMetadataAdapter::supportsFormat(const std::string &extension) const {
   }
   return (ext == ".flac" || ext == ".wav" || ext == ".aiff" || ext == ".aif" ||
           ext == ".mp3" || ext == ".m4a" || ext == ".alac" || ext == ".mp4" ||
-          ext == ".m4b" || ext == ".aac" || ext == ".ogg" || ext == ".opus" ||
-          ext == ".dsf" || ext == ".dff" || ext == ".ape" || ext == ".wv" ||
-          ext == ".wma");
+          ext == ".m4b" || ext == ".aac" || ext == ".ogg" || ext == ".oga" ||
+          ext == ".opus" || ext == ".spx" || ext == ".dsf" || ext == ".dff" ||
+          ext == ".ape" || ext == ".wv" || ext == ".wma");
 }
 
 std::string TagLibMetadataAdapter::computeHash(const uint8_t *data,
@@ -142,15 +147,17 @@ TagLibMetadataAdapter::extractFromId3v2(TagLib::ID3v2::Tag *id3v2) {
   }
 
   if (selected) {
-    core::ExtractedArtwork art;
-    const char *dataPtr = selected->picture().data();
-    size_t dataSize = selected->picture().size();
-    art.data.assign(dataPtr, dataPtr + dataSize);
-    std::string mime = selected->mimeType().to8Bit(true);
-    art.mimeType =
-        mime.empty() ? detectMimeType(art.data.data(), art.data.size()) : mime;
-    art.artHash = computeHash(art.data.data(), art.data.size());
-    return art;
+    TagLib::ByteVector picData = selected->picture();
+    if (!picData.isEmpty()) {
+      core::ExtractedArtwork art;
+      art.data.assign(picData.data(), picData.data() + picData.size());
+      std::string mime = selected->mimeType().to8Bit(true);
+      art.mimeType = mime.empty()
+                         ? detectMimeType(art.data.data(), art.data.size())
+                         : mime;
+      art.artHash = computeHash(art.data.data(), art.data.size());
+      return art;
+    }
   }
 
   return std::nullopt;
@@ -162,43 +169,70 @@ TagLibMetadataAdapter::extractFromXiphComment(
   if (!comment) {
     return std::nullopt;
   }
-  const auto &fieldMap = comment->fieldListMap();
 
-  if (fieldMap.contains("METADATA_BLOCK_PICTURE") &&
-      !fieldMap["METADATA_BLOCK_PICTURE"].isEmpty()) {
-    for (const auto &str : fieldMap["METADATA_BLOCK_PICTURE"]) {
-      TagLib::ByteVector b64(str.toCString(true));
-      TagLib::ByteVector decoded = TagLib::ByteVector::fromBase64(b64);
-      if (decoded.size() > 32) {
-        TagLib::FLAC::Picture pic;
-        if (pic.parse(decoded) && pic.data().size() > 0) {
-          core::ExtractedArtwork art;
-          const char *dataPtr = pic.data().data();
-          size_t dataSize = pic.data().size();
-          art.data.assign(dataPtr, dataPtr + dataSize);
-          std::string mime = pic.mimeType().to8Bit(true);
-          art.mimeType = mime.empty()
-                             ? detectMimeType(art.data.data(), art.data.size())
-                             : mime;
-          art.artHash = computeHash(art.data.data(), art.data.size());
-          return art;
+  // TagLib 2.x parses METADATA_BLOCK_PICTURE directly into pictureList()
+  const auto &pics = comment->pictureList();
+  if (!pics.isEmpty()) {
+    const TagLib::FLAC::Picture *selectedPic = nullptr;
+    for (const auto *pic : pics) {
+      if (pic) {
+        TagLib::ByteVector picData = pic->data();
+        if (!picData.isEmpty()) {
+          if (pic->type() == TagLib::FLAC::Picture::FrontCover) {
+            selectedPic = pic;
+            break;
+          }
+          if (!selectedPic) {
+            selectedPic = pic;
+          }
         }
+      }
+    }
+    if (selectedPic) {
+      TagLib::ByteVector picData = selectedPic->data();
+      if (!picData.isEmpty()) {
+        core::ExtractedArtwork art;
+        art.data.assign(picData.data(), picData.data() + picData.size());
+        art.mimeType = detectMimeType(art.data.data(), art.data.size());
+        art.artHash = computeHash(art.data.data(), art.data.size());
+        return art;
       }
     }
   }
 
-  if (fieldMap.contains("COVERART") && !fieldMap["COVERART"].isEmpty()) {
-    for (const auto &str : fieldMap["COVERART"]) {
-      TagLib::ByteVector b64(str.toCString(true));
-      TagLib::ByteVector decoded = TagLib::ByteVector::fromBase64(b64);
-      if (decoded.size() > 16) {
-        core::ExtractedArtwork art;
-        const char *dataPtr = decoded.data();
-        size_t dataSize = decoded.size();
-        art.data.assign(dataPtr, dataPtr + dataSize);
-        art.mimeType = detectMimeType(art.data.data(), art.data.size());
-        art.artHash = computeHash(art.data.data(), art.data.size());
-        return art;
+  // Fallback for raw base64 Vorbis comment fields (case-insensitive)
+  const auto &fieldMap = comment->fieldListMap();
+  for (const auto &[key, list] : fieldMap) {
+    std::string k = toLower(key.to8Bit(true));
+    if (k == "metadata_block_picture") {
+      for (const auto &str : list) {
+        TagLib::ByteVector b64(str.toCString(true));
+        TagLib::ByteVector decoded = TagLib::ByteVector::fromBase64(b64);
+        if (decoded.size() > 32) {
+          TagLib::FLAC::Picture pic;
+          if (pic.parse(decoded)) {
+            TagLib::ByteVector picData = pic.data();
+            if (!picData.isEmpty()) {
+              core::ExtractedArtwork art;
+              art.data.assign(picData.data(), picData.data() + picData.size());
+              art.mimeType = detectMimeType(art.data.data(), art.data.size());
+              art.artHash = computeHash(art.data.data(), art.data.size());
+              return art;
+            }
+          }
+        }
+      }
+    } else if (k == "coverart") {
+      for (const auto &str : list) {
+        TagLib::ByteVector b64(str.toCString(true));
+        TagLib::ByteVector decoded = TagLib::ByteVector::fromBase64(b64);
+        if (decoded.size() > 16) {
+          core::ExtractedArtwork art;
+          art.data.assign(decoded.data(), decoded.data() + decoded.size());
+          art.mimeType = detectMimeType(art.data.data(), art.data.size());
+          art.artHash = computeHash(art.data.data(), art.data.size());
+          return art;
+        }
       }
     }
   }
@@ -243,27 +277,31 @@ TagLibMetadataAdapter::extractEmbeddedArtwork(const std::string &filePath) {
       const auto &pictures = flacFile.pictureList();
       const TagLib::FLAC::Picture *selectedPic = nullptr;
       for (const auto *pic : pictures) {
-        if (pic && pic->data().size() > 0) {
-          if (pic->type() == TagLib::FLAC::Picture::FrontCover) {
-            selectedPic = pic;
-            break;
-          }
-          if (!selectedPic) {
-            selectedPic = pic;
+        if (pic) {
+          TagLib::ByteVector picData = pic->data();
+          if (!picData.isEmpty()) {
+            if (pic->type() == TagLib::FLAC::Picture::FrontCover) {
+              selectedPic = pic;
+              break;
+            }
+            if (!selectedPic) {
+              selectedPic = pic;
+            }
           }
         }
       }
       if (selectedPic) {
-        core::ExtractedArtwork art;
-        const char *dataPtr = selectedPic->data().data();
-        size_t dataSize = selectedPic->data().size();
-        art.data.assign(dataPtr, dataPtr + dataSize);
-        std::string mime = selectedPic->mimeType().to8Bit(true);
-        art.mimeType = mime.empty()
-                           ? detectMimeType(art.data.data(), art.data.size())
-                           : mime;
-        art.artHash = computeHash(art.data.data(), art.data.size());
-        return art;
+        TagLib::ByteVector picData = selectedPic->data();
+        if (!picData.isEmpty()) {
+          core::ExtractedArtwork art;
+          art.data.assign(picData.data(), picData.data() + picData.size());
+          std::string mime = selectedPic->mimeType().to8Bit(true);
+          art.mimeType = mime.empty()
+                             ? detectMimeType(art.data.data(), art.data.size())
+                             : mime;
+          art.artHash = computeHash(art.data.data(), art.data.size());
+          return art;
+        }
       }
 
       if (flacFile.xiphComment()) {
@@ -306,16 +344,23 @@ TagLibMetadataAdapter::extractEmbeddedArtwork(const std::string &filePath) {
             mp4Tag->itemMap()["covr"].toCoverArtList();
         if (!coverList.isEmpty()) {
           const auto &cover = coverList.front();
-          if (cover.data().size() > 0) {
+          TagLib::ByteVector picData = cover.data();
+          if (!picData.isEmpty()) {
             core::ExtractedArtwork art;
-            const char *dataPtr = cover.data().data();
-            size_t dataSize = cover.data().size();
-            art.data.assign(dataPtr, dataPtr + dataSize);
+            art.data.assign(picData.data(), picData.data() + picData.size());
             art.mimeType = detectMimeType(art.data.data(), art.data.size());
             art.artHash = computeHash(art.data.data(), art.data.size());
             return art;
           }
         }
+      }
+    }
+    if (ext == ".aac") {
+      TagLib::MPEG::File mpegFile(filePath.c_str());
+      if (mpegFile.isValid() && mpegFile.ID3v2Tag()) {
+        auto art = extractFromId3v2(mpegFile.ID3v2Tag());
+        if (art)
+          return art;
       }
     }
   }
@@ -341,19 +386,31 @@ TagLibMetadataAdapter::extractEmbeddedArtwork(const std::string &filePath) {
     }
   }
 
-  if (ext == ".ogg") {
+  if (ext == ".ogg" || ext == ".oga") {
     TagLib::Ogg::Vorbis::File vorbisFile(filePath.c_str());
     if (vorbisFile.isValid() && vorbisFile.tag()) {
       auto art = extractFromXiphComment(vorbisFile.tag());
       if (art)
         return art;
     }
-  }
-
-  if (ext == ".opus") {
     TagLib::Ogg::Opus::File opusFile(filePath.c_str());
     if (opusFile.isValid() && opusFile.tag()) {
       auto art = extractFromXiphComment(opusFile.tag());
+      if (art)
+        return art;
+    }
+  }
+
+  if (ext == ".opus" || ext == ".spx") {
+    TagLib::Ogg::Opus::File opusFile(filePath.c_str());
+    if (opusFile.isValid() && opusFile.tag()) {
+      auto art = extractFromXiphComment(opusFile.tag());
+      if (art)
+        return art;
+    }
+    TagLib::Ogg::Vorbis::File vorbisFile(filePath.c_str());
+    if (vorbisFile.isValid() && vorbisFile.tag()) {
+      auto art = extractFromXiphComment(vorbisFile.tag());
       if (art)
         return art;
     }
@@ -409,11 +466,10 @@ TagLibMetadataAdapter::extractEmbeddedArtwork(const std::string &filePath) {
         const auto &attrs = attrMap["WM/Picture"];
         for (const auto &attr : attrs) {
           TagLib::ASF::Picture pic = attr.toPicture();
-          if (pic.isValid() && pic.picture().size() > 0) {
+          TagLib::ByteVector picData = pic.picture();
+          if (pic.isValid() && !picData.isEmpty()) {
             core::ExtractedArtwork art;
-            const char *dataPtr = pic.picture().data();
-            size_t dataSize = pic.picture().size();
-            art.data.assign(dataPtr, dataPtr + dataSize);
+            art.data.assign(picData.data(), picData.data() + picData.size());
             art.mimeType = detectMimeType(art.data.data(), art.data.size());
             art.artHash = computeHash(art.data.data(), art.data.size());
             return art;
@@ -532,11 +588,10 @@ TagLibMetadataAdapter::findFolderArtwork(const std::string &filePath) {
       if (size > 0 && size < 50 * 1024 * 1024) {
         core::ExtractedArtwork art;
         art.data.resize(size);
-        FILE *f = fopen(bestCandidate.string().c_str(), "rb");
-        if (f) {
-          size_t readBytes = fread(art.data.data(), 1, size, f);
-          fclose(f);
-          if (readBytes == size) {
+        std::ifstream ifs(bestCandidate, std::ios::binary);
+        if (ifs) {
+          ifs.read(reinterpret_cast<char *>(art.data.data()), size);
+          if (ifs.gcount() == static_cast<std::streamsize>(size)) {
             art.mimeType = detectMimeType(art.data.data(), art.data.size());
             art.artHash = computeHash(art.data.data(), art.data.size());
             result = art;
@@ -561,12 +616,19 @@ TagLibMetadataAdapter::extractArtwork(const std::string &filePath) {
     return std::nullopt;
   }
 
-  auto embeddedArt = extractEmbeddedArtwork(filePath);
-  if (embeddedArt.has_value() && !embeddedArt->data.empty()) {
-    return embeddedArt;
+  if (m_preferEmbedded) {
+    auto embeddedArt = extractEmbeddedArtwork(filePath);
+    if (embeddedArt.has_value() && !embeddedArt->data.empty()) {
+      return embeddedArt;
+    }
+    return findFolderArtwork(filePath);
   }
 
-  return findFolderArtwork(filePath);
+  auto folderArt = findFolderArtwork(filePath);
+  if (folderArt.has_value() && !folderArt->data.empty()) {
+    return folderArt;
+  }
+  return extractEmbeddedArtwork(filePath);
 }
 
 std::optional<core::Track>

@@ -1,6 +1,9 @@
 #include "adapters/metadata/TagLibMetadataAdapter.hpp"
 #include "adapters/storage/SqliteDatabaseAdapter.hpp"
 #include "adapters/ui_qt/models/TrackListModel.hpp"
+#include "adapters/ui_qt/providers/AlbumArtImageProvider.hpp"
+#include <QBuffer>
+#include <QImage>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -23,6 +26,16 @@ protected:
     fs::create_directories(path.parent_path());
     std::ofstream ofs(path, std::ios::binary);
     ofs.write(reinterpret_cast<const char *>(data.data()), data.size());
+  }
+
+  static std::vector<uint8_t> createValidImageBytes() {
+    QImage img(4, 4, QImage::Format_RGB32);
+    img.fill(Qt::red);
+    QByteArray bytes;
+    QBuffer buffer(&bytes);
+    buffer.open(QIODevice::WriteOnly);
+    img.save(&buffer, "PNG");
+    return std::vector<uint8_t>(bytes.begin(), bytes.end());
   }
 };
 
@@ -67,7 +80,9 @@ TEST_F(MetadataArtTest, SupportsAllCommonAudioExtensionsCaseInsensitively) {
   EXPECT_TRUE(adapter.supportsFormat(".wav"));
   EXPECT_TRUE(adapter.supportsFormat(".aiff"));
   EXPECT_TRUE(adapter.supportsFormat(".ogg"));
+  EXPECT_TRUE(adapter.supportsFormat(".oga"));
   EXPECT_TRUE(adapter.supportsFormat(".opus"));
+  EXPECT_TRUE(adapter.supportsFormat(".spx"));
   EXPECT_TRUE(adapter.supportsFormat(".dsf"));
   EXPECT_TRUE(adapter.supportsFormat(".dff"));
   EXPECT_TRUE(adapter.supportsFormat(".ape"));
@@ -336,4 +351,136 @@ TEST_F(MetadataArtTest, AlbumGroupingSplitsFeaturingArtistsWhenDisabled) {
   auto tracksSnoop = db.getTracksByAlbum("2001", "Dr. Dre feat. Snoop Dogg");
   EXPECT_EQ(tracksSnoop.size(), 1u);
   EXPECT_EQ(tracksSnoop[0].title, "Still D.R.E.");
+}
+
+TEST_F(MetadataArtTest, ArtworkPriorityHonorsPreference) {
+  adapters::TagLibMetadataAdapter adapter;
+  fs::path albumDir = m_testDir / "PriorityAlbum";
+  fs::path dummyTrack = albumDir / "01.flac";
+  fs::path coverFile = albumDir / "cover.jpg";
+
+  std::vector<uint8_t> jpegData = {0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10,
+                                   'J',  'F',  'I',  'F',  0x00};
+  writeDummyFile(dummyTrack, {0x66, 0x4C, 0x61, 0x43}); // dummy file
+  writeDummyFile(coverFile, jpegData);
+
+  // External Folder Art First
+  adapter.setArtworkPriority(false);
+  auto artFolder = adapter.extractArtwork(dummyTrack.string());
+  ASSERT_TRUE(artFolder.has_value());
+  EXPECT_EQ(artFolder->data, jpegData);
+
+  // Embedded Tags First (falls back to folder art when embedded missing)
+  adapter.setArtworkPriority(true);
+  auto artEmbeddedFallback = adapter.extractArtwork(dummyTrack.string());
+  ASSERT_TRUE(artEmbeddedFallback.has_value());
+  EXPECT_EQ(artEmbeddedFallback->data, jpegData);
+}
+
+TEST_F(MetadataArtTest, ImageProviderCachesBothAlbumIdAndArtHash) {
+  adapters::SqliteDatabaseAdapter db;
+  std::string dbPath = (m_testDir / "test_provider.db").string();
+  ASSERT_TRUE(db.initialize(dbPath));
+
+  fs::path albumDir = m_testDir / "AlbumProvider";
+  fs::path trackFile = albumDir / "track.flac";
+  fs::path coverFile = albumDir / "cover.jpg";
+  fs::path cacheDir = m_testDir / "covers_cache";
+
+  std::vector<uint8_t> imgData = createValidImageBytes();
+  writeDummyFile(trackFile, {0x66, 0x4C, 0x61, 0x43});
+  writeDummyFile(coverFile, imgData);
+
+  adapters::TagLibMetadataAdapter adapter;
+  auto artOpt = adapter.extractArtwork(trackFile.string());
+  ASSERT_TRUE(artOpt.has_value());
+  std::string hash = artOpt->artHash;
+  ASSERT_FALSE(hash.empty());
+
+  core::Track t;
+  t.id = "trk_provider";
+  t.filePath = trackFile.string();
+  t.title = "Sample Title";
+  t.artist = "Sample Artist";
+  t.album = "Sample Album";
+  t.albumArtist = "Sample Artist";
+  t.artHash = hash;
+  ASSERT_TRUE(db.saveTrack(t));
+
+  AlbumArtImageProvider provider(&adapter, &db,
+                                 QString::fromStdString(cacheDir.string()));
+
+  // Request using album ID
+  QSize sz;
+  provider.requestPixmap("alb_Sample Album_Sample Artist", &sz,
+                         QSize(200, 200));
+
+  // Both alb_Sample Album_Sample Artist.jpg and <hash>.jpg should be written
+  EXPECT_TRUE(fs::exists(cacheDir / "alb_Sample Album_Sample Artist.jpg"));
+  EXPECT_TRUE(fs::exists(cacheDir / (hash + ".jpg")));
+}
+
+TEST_F(MetadataArtTest,
+       ImageProviderResolvesLegacyTrackArtistWhenMatchingAlbumId) {
+  adapters::SqliteDatabaseAdapter db;
+  std::string dbPath = (m_testDir / "test_legacy_match.db").string();
+  ASSERT_TRUE(db.initialize(dbPath));
+
+  fs::path albumDir = m_testDir / "LegacyAlbum";
+  fs::path trackFile = albumDir / "01.flac";
+  fs::path coverFile = albumDir / "cover.jpg";
+  fs::path cacheDir = m_testDir / "covers_legacy_cache";
+
+  std::vector<uint8_t> imgData = createValidImageBytes();
+  writeDummyFile(trackFile, {0x66, 0x4C, 0x61, 0x43});
+  writeDummyFile(coverFile, imgData);
+
+  adapters::TagLibMetadataAdapter adapter;
+  auto artOpt = adapter.extractArtwork(trackFile.string());
+  ASSERT_TRUE(artOpt.has_value());
+
+  core::Track t;
+  t.id = "trk_legacy_match";
+  t.filePath = trackFile.string();
+  t.title = "Legacy Title";
+  t.artist = "Solo Artist";
+  t.album = "Legacy Album";
+  t.albumArtist = "Unknown Artist"; // Legacy placeholder in database
+  t.artHash = artOpt->artHash;
+  ASSERT_TRUE(db.saveTrack(t));
+
+  AlbumArtImageProvider provider(&adapter, &db,
+                                 QString::fromStdString(cacheDir.string()));
+
+  // Request by effective album card ID (alb_Legacy Album_Solo Artist)
+  QSize sz;
+  provider.requestPixmap("alb_Legacy Album_Solo Artist", &sz, QSize(200, 200));
+
+  EXPECT_TRUE(fs::exists(cacheDir / "alb_Legacy Album_Solo Artist.jpg"));
+  EXPECT_TRUE(fs::exists(cacheDir / (artOpt->artHash + ".jpg")));
+}
+
+TEST_F(MetadataArtTest, ExtractsArtworkFromOpusXiphComment) {
+  adapters::TagLibMetadataAdapter adapter;
+  std::string samithaPath =
+      "/home/shamal/Music/newAud/Laa Sanda Aye Payala - Samitha "
+      "Mudunkotuwa/Laa Sanda Aye Payala - Samitha Mudunkotuwa.opus";
+  if (fs::exists(samithaPath)) {
+    auto art = adapter.extractArtwork(samithaPath);
+    ASSERT_TRUE(art.has_value());
+    EXPECT_EQ(art->data.size(), 61937u);
+    EXPECT_EQ(art->mimeType, "image/jpeg");
+    EXPECT_EQ(art->artHash, "dec63f7ec72ac9b2");
+  }
+
+  std::string sangeethPath =
+      "/home/shamal/Music/newAud/Sangeeth Wijesuriya - Sangeeth Medley "
+      "(Live)/Sangeeth Medley (Live).opus";
+  if (fs::exists(sangeethPath)) {
+    auto art = adapter.extractArtwork(sangeethPath);
+    ASSERT_TRUE(art.has_value());
+    EXPECT_EQ(art->data.size(), 1458244u);
+    EXPECT_EQ(art->mimeType, "image/png");
+    EXPECT_EQ(art->artHash, "3e7dace7273c5cba");
+  }
 }

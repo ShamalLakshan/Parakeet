@@ -138,6 +138,8 @@ void QtBridge::loadSettings() {
           .toString();
   m_artworkPriority =
       s.value("library/artworkPriority", "Embedded Tags First").toString();
+  m_library.getMetadataExtractor().setArtworkPriority(
+      m_artworkPriority != "External Folder Art First");
   m_groupAlbumsByTitle = s.value("library/groupAlbumsByTitle", true).toBool();
   m_library.getDatabasePort().setGroupAlbumsByTitle(m_groupAlbumsByTitle);
 
@@ -2538,6 +2540,8 @@ void QtBridge::setExcludeFolders(const QString &patterns) {
 void QtBridge::setArtworkPriority(const QString &priority) {
   if (m_artworkPriority != priority) {
     m_artworkPriority = priority;
+    m_library.getMetadataExtractor().setArtworkPriority(
+        m_artworkPriority != "External Folder Art First");
     saveSettings();
   }
 }
