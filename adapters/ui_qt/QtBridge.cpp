@@ -2,6 +2,7 @@
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -1858,6 +1859,184 @@ void QtBridge::openFolder(const QString &folderPath, bool enqueue) {
       m_player.playQueue(folderTracks, 0);
       updatePlaybackState(folderTracks[0]);
       syncQueueModel();
+    }
+  }
+}
+
+QStringList QtBridge::extractAudioFilesFromUrls(const QList<QUrl> &urls) {
+  QStringList audioFiles;
+  static const QStringList extensions = {
+      QStringLiteral(".flac"), QStringLiteral(".wav"), QStringLiteral(".aiff"),
+      QStringLiteral(".aif"),  QStringLiteral(".mp3"), QStringLiteral(".m4a"),
+      QStringLiteral(".alac"), QStringLiteral(".mp4"), QStringLiteral(".m4b"),
+      QStringLiteral(".aac"),  QStringLiteral(".ogg"), QStringLiteral(".oga"),
+      QStringLiteral(".opus"), QStringLiteral(".spx"), QStringLiteral(".dsf"),
+      QStringLiteral(".dff"),  QStringLiteral(".ape"), QStringLiteral(".wv"),
+      QStringLiteral(".wma"),  QStringLiteral(".cue"), QStringLiteral(".m3u"),
+      QStringLiteral(".m3u8"), QStringLiteral(".pls")};
+
+  for (const QUrl &url : urls) {
+    QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
+    if (path.startsWith(QStringLiteral("file://"))) {
+      path = path.mid(7);
+    }
+    QFileInfo fi(path);
+    if (!fi.exists()) {
+      continue;
+    }
+
+    if (fi.isDir()) {
+      QDirIterator it(path, QDir::Files | QDir::NoSymLinks,
+                      QDirIterator::Subdirectories);
+      while (it.hasNext()) {
+        it.next();
+        QString ext = QStringLiteral(".") + it.fileInfo().suffix().toLower();
+        if (extensions.contains(ext)) {
+          audioFiles.append(it.filePath());
+        }
+      }
+    } else if (fi.isFile()) {
+      QString ext = QStringLiteral(".") + fi.suffix().toLower();
+      if (extensions.contains(ext)) {
+        audioFiles.append(fi.absoluteFilePath());
+      }
+    }
+  }
+  return audioFiles;
+}
+
+void QtBridge::handleDropOnTracks(const QList<QUrl> &urls,
+                                  bool playImmediately) {
+  QStringList files = extractAudioFilesFromUrls(urls);
+  if (files.isEmpty()) {
+    return;
+  }
+
+  std::vector<core::Track> tracks;
+  tracks.reserve(files.size());
+
+  for (const QString &file : files) {
+    if (file.endsWith(QStringLiteral(".cue"), Qt::CaseInsensitive)) {
+      openCueSheet(file);
+      continue;
+    }
+    auto trackOpt =
+        m_library.getMetadataExtractor().extract(file.toStdString());
+    if (trackOpt) {
+      m_library.getDatabasePort().saveTrack(*trackOpt);
+      tracks.push_back(*trackOpt);
+    }
+  }
+
+  if (tracks.empty()) {
+    return;
+  }
+
+  m_trackModel->loadAllTracks();
+  m_albumModel->reload();
+  refreshLibraryStats();
+
+  if (playImmediately) {
+    m_player.playQueue(tracks, 0);
+    updatePlaybackState(tracks[0]);
+  } else {
+    m_player.queueLast(tracks);
+  }
+  syncQueueModel();
+}
+
+void QtBridge::handleDropOnQueue(const QList<QUrl> &urls) {
+  QStringList files = extractAudioFilesFromUrls(urls);
+  if (files.isEmpty()) {
+    return;
+  }
+
+  std::vector<core::Track> tracks;
+  tracks.reserve(files.size());
+
+  for (const QString &file : files) {
+    auto trackOpt =
+        m_library.getMetadataExtractor().extract(file.toStdString());
+    if (trackOpt) {
+      m_library.getDatabasePort().saveTrack(*trackOpt);
+      tracks.push_back(*trackOpt);
+    }
+  }
+
+  if (!tracks.empty()) {
+    m_player.queueLast(tracks);
+    syncQueueModel();
+  }
+}
+
+void QtBridge::handleDropOnPlaylist(const QList<QUrl> &urls,
+                                    const QString &targetPlaylist) {
+  QStringList files = extractAudioFilesFromUrls(urls);
+  if (files.isEmpty()) {
+    return;
+  }
+
+  QString plName = targetPlaylist.trimmed();
+  if (plName.isEmpty()) {
+    if (!urls.isEmpty()) {
+      QString firstPath = urls.first().isLocalFile()
+                              ? urls.first().toLocalFile()
+                              : urls.first().toString();
+      if (firstPath.startsWith(QStringLiteral("file://"))) {
+        firstPath = firstPath.mid(7);
+      }
+      QFileInfo fi(firstPath);
+      if (fi.isDir()) {
+        plName = fi.fileName();
+      } else {
+        plName = fi.dir().dirName();
+      }
+    }
+    if (plName.isEmpty()) {
+      plName = QStringLiteral("Dropped Tracks");
+    }
+    createPlaylist(plName);
+  }
+
+  QVariantList trackVariants;
+  for (const QString &file : files) {
+    auto trackOpt =
+        m_library.getMetadataExtractor().extract(file.toStdString());
+    if (trackOpt) {
+      m_library.getDatabasePort().saveTrack(*trackOpt);
+      QVariantMap map;
+      map.insert(QStringLiteral("filePath"),
+                 QString::fromStdString(trackOpt->filePath));
+      map.insert(QStringLiteral("title"),
+                 QString::fromStdString(trackOpt->title));
+      map.insert(QStringLiteral("artist"),
+                 QString::fromStdString(trackOpt->artist));
+      map.insert(QStringLiteral("durationMs"),
+                 static_cast<qint64>(trackOpt->durationMs));
+      trackVariants.append(map);
+    }
+  }
+
+  if (!trackVariants.isEmpty()) {
+    addTracksToPlaylist(plName, trackVariants);
+    if (m_activePlaylistName == plName) {
+      openPlaylist(plName);
+    }
+  }
+}
+
+void QtBridge::handleDropOnExplorer(const QList<QUrl> &urls) {
+  for (const QUrl &url : urls) {
+    QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
+    if (path.startsWith(QStringLiteral("file://"))) {
+      path = path.mid(7);
+    }
+    QFileInfo fi(path);
+    if (fi.isDir()) {
+      addMonitoredFolder(path);
+      scanDirectory(path);
+    } else if (fi.isFile()) {
+      openAudioFile(path);
     }
   }
 }

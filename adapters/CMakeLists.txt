@@ -1,9 +1,14 @@
 find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Multimedia Widgets)
+find_package(Qt6 OPTIONAL_COMPONENTS DBus)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SQLITE REQUIRED sqlite3)
 pkg_check_modules(TAGLIB REQUIRED taglib)
 
-# UI, Theming, Data & Audio Adapters
+if(Qt6DBus_FOUND)
+    add_compile_definitions(PARAKEET_ENABLE_DBUS)
+endif()
+
+# UI, Theming, Data, Audio & Desktop Adapters
 qt_add_library(ui_adapter STATIC
     ui_qt/QtBridge.hpp
     ui_qt/QtBridge.cpp
@@ -21,7 +26,23 @@ qt_add_library(ui_adapter STATIC
     storage/SqliteDatabaseAdapter.cpp
     audio/BitPerfectAudioAdapter.hpp
     audio/BitPerfectAudioAdapter.cpp
+    desktop/PlatformMediaControls.hpp
+    desktop/MprisAdapter.hpp
+    desktop/MprisAdapter.cpp
+    desktop/WindowsMediaControls.hpp
+    desktop/WindowsMediaControls.cpp
+    desktop/MacMediaControls.hpp
+    desktop/MacMediaControls.cpp
+    desktop/DesktopTrayAdapter.hpp
+    desktop/DesktopTrayAdapter.cpp
+    desktop/DesktopNotificationAdapter.hpp
+    desktop/DesktopNotificationAdapter.cpp
+    desktop/SingleInstanceManager.hpp
+    desktop/SingleInstanceManager.cpp
+    desktop/DesktopIntegrationManager.hpp
+    desktop/DesktopIntegrationManager.cpp
     ${CMAKE_SOURCE_DIR}/themes/themes.qrc
+    ${CMAKE_SOURCE_DIR}/deploy/icons.qrc
 )
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/
@@ -81,6 +102,7 @@ target_link_libraries(ui_adapter PUBLIC
     Qt6::QuickControls2
     Qt6::Multimedia
     Qt6::Widgets
+    $<$<BOOL:${Qt6DBus_FOUND}>:Qt6::DBus>
     ${SQLITE_LIBRARIES}
     ${TAGLIB_LIBRARIES}
 )
@@ -94,6 +116,7 @@ target_include_directories(ui_adapter PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/metadata
     ${CMAKE_CURRENT_SOURCE_DIR}/storage
     ${CMAKE_CURRENT_SOURCE_DIR}/audio
+    ${CMAKE_CURRENT_SOURCE_DIR}/desktop
     ${SQLITE_INCLUDE_DIRS}
     ${TAGLIB_INCLUDE_DIRS}
 )

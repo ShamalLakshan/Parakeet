@@ -7,6 +7,15 @@ Exec=Parakeet %U
 Icon=parakeet
 Terminal=false
 Categories=Audio;Music;Player;AudioVideo;
-MimeType=audio/flac;audio/x-wav;audio/mpeg;audio/mp4;audio/ogg;audio/x-vorbis+ogg;audio/opus;audio/x-aiff;audio/aac;audio/x-monkeys-audio;audio/x-ms-wma;application/x-cue;
+MimeType=audio/flac;audio/x-flac;audio/x-wav;audio/wav;audio/mpeg;audio/mp3;audio/mp4;audio/m4a;audio/x-m4a;audio/ogg;audio/x-vorbis+ogg;audio/opus;audio/x-opus;audio/x-aiff;audio/aiff;audio/aac;audio/x-monkeys-audio;audio/x-ape;audio/x-wavpack;audio/x-ms-wma;application/x-cue;audio/x-scpls;audio/x-mpegurl;audio/x-playlist;
 StartupNotify=true
 StartupWMClass=Parakeet
+Actions=Play;Enqueue;
+
+[Desktop Action Play]
+Name=Play with Parakeet
+Exec=Parakeet %U
+
+[Desktop Action Enqueue]
+Name=Enqueue in Parakeet
+Exec=Parakeet --enqueue %U

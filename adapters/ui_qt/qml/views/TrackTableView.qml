@@ -19,6 +19,53 @@ Item {
         anchors.fill: parent
         spacing: 0
 
+        DropArea {
+            id: tableDropArea
+            anchors.fill: parent
+            onEntered: (drag) => {
+                if (drag.hasUrls) {
+                    drag.acceptProposedAction();
+                }
+            }
+            onDropped: (drop) => {
+                if (drop.hasUrls) {
+                    bridge.handleDropOnTracks(drop.urls, true);
+                    drop.acceptProposedAction();
+                }
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.12)
+            border.color: Theme.accent
+            border.width: 2
+            radius: Theme.cornerRadiusMedium
+            visible: tableDropArea.containsDrag
+            z: 999
+            clip: true
+
+            RowLayout {
+                anchors.centerIn: parent
+                spacing: Theme.spacingMedium
+
+                VectorIcon {
+                    name: "play"
+                    width: 24
+                    height: 24
+                    color: Theme.accent
+                }
+
+                Text {
+                    text: "Drop audio files or folders to play immediately"
+                    color: Theme.accent
+                    font.pixelSize: Theme.fontSizeMedium
+                    font.family: Theme.fontFamily
+                    font.bold: true
+                }
+            }
+        }
+
         component TableHeaderCell: Item {
             id: cellRoot
             property string colKey: ""

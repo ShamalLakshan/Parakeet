@@ -686,6 +686,17 @@ public:
   Q_INVOKABLE bool exportActiveView(const QString &filePath,
                                     const QString &format = QString());
 
+  // Drag and Drop Operations
+  Q_INVOKABLE void handleDropOnTracks(const QList<QUrl> &urls,
+                                      bool playImmediately = true);
+  Q_INVOKABLE void handleDropOnQueue(const QList<QUrl> &urls);
+  Q_INVOKABLE void
+  handleDropOnPlaylist(const QList<QUrl> &urls,
+                       const QString &targetPlaylist = QString());
+  Q_INVOKABLE void handleDropOnExplorer(const QList<QUrl> &urls);
+  [[nodiscard]] static QStringList
+  extractAudioFilesFromUrls(const QList<QUrl> &urls);
+
   // Edit & Undo Operations
   Q_INVOKABLE void undo();
   Q_INVOKABLE void redo();

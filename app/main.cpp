@@ -2,15 +2,19 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQuickWindow>
 #include <QStandardPaths>
+#include <iostream>
 #include <memory>
 
 #include "QtBridge.hpp"
 #include "audio/BitPerfectAudioAdapter.hpp"
 #include "core/services/LibraryService.hpp"
 #include "core/services/PlayerService.hpp"
+#include "desktop/DesktopIntegrationManager.hpp"
 #include "metadata/TagLibMetadataAdapter.hpp"
 #include "providers/AlbumArtImageProvider.hpp"
 #include "storage/SqliteDatabaseAdapter.hpp"
@@ -20,6 +24,27 @@ int main(int argc, char *argv[]) {
   QApplication app(argc, argv);
   app.setOrganizationName("ParakeetAudio");
   app.setApplicationName("Parakeet");
+  app.setWindowIcon(QIcon(":/icons/parakeet.svg"));
+
+  if (app.arguments().contains(QStringLiteral("--help")) ||
+      app.arguments().contains(QStringLiteral("-h"))) {
+    std::cout << "Parakeet - Lightweight high-fidelity music player\n\n"
+              << "Usage: parakeet [OPTIONS] [FILES/FOLDERS...]\n\n"
+              << "Options:\n"
+              << "  --play             Resume or start playback\n"
+              << "  --pause            Pause active playback\n"
+              << "  --toggle           Toggle between play and pause\n"
+              << "  --stop             Stop playback\n"
+              << "  --next             Skip to next track in queue\n"
+              << "  --prev, --previous Return to previous track\n"
+              << "  --volume <0-100>   Set playback volume percentage\n"
+              << "  --enqueue, -e      Append files or folders to queue "
+                 "without interrupting playback\n"
+              << "  --raise, --show    Bring primary window to the foreground\n"
+              << "  --portable         Run in portable data mode\n"
+              << "  --help, -h         Show this help message\n";
+    return 0;
+  }
 
   // Determine application data directory (support portable mode & AppImage)
   QString baseDir;
@@ -69,6 +94,13 @@ int main(int argc, char *argv[]) {
   // Bridge connecting core to QML
   QtBridge bridge(playerService, libraryService, themeLoader.get());
 
+  // Desktop integration (Single-instance IPC, MPRIS, Tray, Notifications)
+  adapters::DesktopIntegrationManager desktop(&bridge);
+  if (!desktop.initialize(app.arguments(), QDir::currentPath())) {
+    // Secondary instance forwarded arguments to primary instance; exit cleanly
+    return 0;
+  }
+
   // Play next track when current one finishes
   audioEngine->setEndOfTrackCallback([&bridge]() {
     QMetaObject::invokeMethod(&bridge, "nextTrack", Qt::QueuedConnection);
@@ -85,13 +117,30 @@ int main(int argc, char *argv[]) {
                                             dbAdapter.get(), coversDir));
   engine.rootContext()->setContextProperty("Theme", themeLoader.get());
   engine.rootContext()->setContextProperty("bridge", &bridge);
+  engine.rootContext()->setContextProperty("desktopIntegration", &desktop);
+
+  // Connect QML quit signal to application quit
+  QObject::connect(&engine, &QQmlApplicationEngine::quit, &app,
+                   &QCoreApplication::quit);
+
+  // Guarantee audio stop and session save on application termination
+  QObject::connect(&app, &QCoreApplication::aboutToQuit,
+                   [&bridge, &audioEngine]() {
+                     audioEngine->stop();
+                     bridge.savePlaybackSession();
+                   });
 
   const QUrl url(QStringLiteral("qrc:/PlayerUI/ui_qt/qml/Main.qml"));
   QObject::connect(
       &engine, &QQmlApplicationEngine::objectCreated, &app,
-      [url](QObject *obj, const QUrl &objUrl) {
-        if (!obj && url == objUrl)
+      [&desktop, url](QObject *obj, const QUrl &objUrl) {
+        if (!obj && url == objUrl) {
           QCoreApplication::exit(-1);
+          return;
+        }
+        if (auto *win = qobject_cast<QQuickWindow *>(obj)) {
+          desktop.setMainWindow(win);
+        }
       },
       Qt::QueuedConnection);
 

@@ -1,0 +1,65 @@
+Windows Registry Editor Version 5.00
+
+; Parakeet Windows File Associations & Context Menu Verbs
+; ProgID Definition
+[HKEY_CURRENT_USER\Software\Classes\Parakeet.AudioFile]
+@="Audio Track"
+"FriendlyTypeName"="Parakeet Audio Track"
+
+[HKEY_CURRENT_USER\Software\Classes\Parakeet.AudioFile\DefaultIcon]
+@="\"%LOCALAPPDATA%\\Parakeet\\Parakeet.exe\",0"
+
+[HKEY_CURRENT_USER\Software\Classes\Parakeet.AudioFile\shell\open]
+@="&Play with Parakeet"
+
+[HKEY_CURRENT_USER\Software\Classes\Parakeet.AudioFile\shell\open\command]
+@="\"%LOCALAPPDATA%\\Parakeet\\Parakeet.exe\" \"%1\""
+
+[HKEY_CURRENT_USER\Software\Classes\Parakeet.AudioFile\shell\enqueue]
+@="&Enqueue in Parakeet"
+
+[HKEY_CURRENT_USER\Software\Classes\Parakeet.AudioFile\shell\enqueue\command]
+@="\"%LOCALAPPDATA%\\Parakeet\\Parakeet.exe\" --enqueue \"%1\""
+
+; Audio Extension Associations
+[HKEY_CURRENT_USER\Software\Classes\.flac\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.wav\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.mp3\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.m4a\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.aac\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.ogg\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.opus\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.aiff\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.ape\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.wv\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.wma\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.cue\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.m3u\OpenWithProgids]
+"Parakeet.AudioFile"=hex:
+
+[HKEY_CURRENT_USER\Software\Classes\.m3u8\OpenWithProgids]
+"Parakeet.AudioFile"=hex:

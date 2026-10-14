@@ -84,6 +84,16 @@ ApplicationWindow {
         bridge.activeNavSection = root.activeNavSection;
         bridge.activePlaylistName = root.activePlaylistName;
         bridge.savePlaybackSession();
+
+        if (typeof desktopIntegration !== "undefined" && !desktopIntegration.handleWindowCloseRequest()) {
+            close.accepted = false;
+        }
+    }
+
+    onVisibilityChanged: {
+        if (visibility === Window.Minimized && typeof desktopIntegration !== "undefined") {
+            desktopIntegration.handleWindowMinimizeRequest();
+        }
     }
 
     // Focus isolation state

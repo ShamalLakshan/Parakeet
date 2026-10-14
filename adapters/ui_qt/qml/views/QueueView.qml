@@ -11,6 +11,53 @@ Item {
         anchors.fill: parent
         spacing: 0
 
+        DropArea {
+            id: queueDropArea
+            anchors.fill: parent
+            onEntered: (drag) => {
+                if (drag.hasUrls) {
+                    drag.acceptProposedAction();
+                }
+            }
+            onDropped: (drop) => {
+                if (drop.hasUrls) {
+                    bridge.handleDropOnQueue(drop.urls);
+                    drop.acceptProposedAction();
+                }
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.12)
+            border.color: Theme.accent
+            border.width: 2
+            radius: Theme.cornerRadiusMedium
+            visible: queueDropArea.containsDrag
+            z: 999
+            clip: true
+
+            RowLayout {
+                anchors.centerIn: parent
+                spacing: Theme.spacingMedium
+
+                VectorIcon {
+                    name: "playlist"
+                    width: 24
+                    height: 24
+                    color: Theme.accent
+                }
+
+                Text {
+                    text: "Drop tracks or folders to enqueue"
+                    color: Theme.accent
+                    font.pixelSize: Theme.fontSizeMedium
+                    font.family: Theme.fontFamily
+                    font.bold: true
+                }
+            }
+        }
+
         // Header
         Rectangle {
             Layout.fillWidth: true

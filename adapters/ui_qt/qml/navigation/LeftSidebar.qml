@@ -185,7 +185,24 @@ Rectangle {
                     delegate: Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 26
-                        color: (root.activeNavSection === 5 && root.activePlaylistName === modelData) ? Theme.selection : (plItemMouse.containsMouse ? Theme.surfaceElevated : "transparent")
+                        color: plItemDropArea.containsDrag ? Theme.selection : ((root.activeNavSection === 5 && root.activePlaylistName === modelData) ? Theme.selection : (plItemMouse.containsMouse ? Theme.surfaceElevated : "transparent"))
+                        border.color: plItemDropArea.containsDrag ? Theme.accent : "transparent"
+                        border.width: plItemDropArea.containsDrag ? 1 : 0
+                        radius: Theme.cornerRadiusSmall
+
+                        DropArea {
+                            id: plItemDropArea
+                            anchors.fill: parent
+                            onEntered: (drag) => {
+                                if (drag.hasUrls) drag.acceptProposedAction();
+                            }
+                            onDropped: (drop) => {
+                                if (drop.hasUrls) {
+                                    bridge.handleDropOnPlaylist(drop.urls, modelData);
+                                    drop.acceptProposedAction();
+                                }
+                            }
+                        }
 
                         RowLayout {
                             anchors.fill: parent
@@ -225,6 +242,43 @@ Rectangle {
                     }
                 }
 
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 28
+                    visible: plNewDropArea.containsDrag || bridge.availablePlaylists.length === 0
+                    color: plNewDropArea.containsDrag ? Theme.surfaceElevated : "transparent"
+                    border.color: plNewDropArea.containsDrag ? Theme.accent : Theme.panelBorder
+                    border.width: 1
+                    radius: Theme.cornerRadiusSmall
+                    Layout.leftMargin: 8
+                    Layout.rightMargin: 8
+
+                    DropArea {
+                        id: plNewDropArea
+                        anchors.fill: parent
+                        onEntered: (drag) => {
+                            if (drag.hasUrls) drag.acceptProposedAction();
+                        }
+                        onDropped: (drop) => {
+                            if (drop.hasUrls) {
+                                bridge.handleDropOnPlaylist(drop.urls, "");
+                                drop.acceptProposedAction();
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        anchors.centerIn: parent
+                        spacing: 6
+                        VectorIcon { name: "plus"; width: 10; height: 10; color: Theme.accent }
+                        Text {
+                            text: "Drop to create playlist"
+                            font.pixelSize: 10
+                            color: Theme.accent
+                        }
+                    }
+                }
+
                 // Section: SOURCES
                 Item { height: 10; width: 1 }
                 Text {
@@ -239,7 +293,24 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 26
-                    color: scanMouse2.containsMouse ? Theme.surfaceElevated : "transparent"
+                    color: folderDropArea.containsDrag ? Theme.selection : (scanMouse2.containsMouse ? Theme.surfaceElevated : "transparent")
+                    border.color: folderDropArea.containsDrag ? Theme.accent : "transparent"
+                    border.width: folderDropArea.containsDrag ? 1 : 0
+                    radius: Theme.cornerRadiusSmall
+
+                    DropArea {
+                        id: folderDropArea
+                        anchors.fill: parent
+                        onEntered: (drag) => {
+                            if (drag.hasUrls) drag.acceptProposedAction();
+                        }
+                        onDropped: (drop) => {
+                            if (drop.hasUrls) {
+                                bridge.handleDropOnExplorer(drop.urls);
+                                drop.acceptProposedAction();
+                            }
+                        }
+                    }
 
                     RowLayout {
                         anchors.fill: parent

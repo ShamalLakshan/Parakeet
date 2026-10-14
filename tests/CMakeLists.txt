@@ -7,6 +7,7 @@ add_executable(parakeet_tests
     test_theme_loader.cpp
     test_settings.cpp
     test_metadata_art.cpp
+    test_desktop_integration.cpp
 )
 
 target_include_directories(parakeet_tests PRIVATE

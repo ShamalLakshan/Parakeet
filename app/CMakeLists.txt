@@ -2,6 +2,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 add_executable(Parakeet
     main.cpp
+    ${CMAKE_SOURCE_DIR}/deploy/icons.qrc
 )
 
 target_link_libraries(Parakeet PRIVATE
