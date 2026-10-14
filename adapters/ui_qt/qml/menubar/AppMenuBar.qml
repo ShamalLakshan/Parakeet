@@ -723,7 +723,7 @@ RowLayout {
             y: parent.height
             MenuItem {
                 text: "Documentation & User Guide (F1)"
-                onTriggered: Qt.openUrlExternally("https://github.com/ShamalLakshan/Parakeet")
+                onTriggered: Qt.openUrlExternally("https://github.com/ShamalLakshan/PicAudio")
             }
             MenuItem {
                 text: "Keyboard Shortcuts Cheat Sheet (Ctrl+/)"
@@ -740,11 +740,11 @@ RowLayout {
             MenuSeparator {}
             MenuItem {
                 text: "Report an Issue / GitHub..."
-                onTriggered: Qt.openUrlExternally("https://github.com/ShamalLakshan/Parakeet/issues")
+                onTriggered: Qt.openUrlExternally("https://github.com/ShamalLakshan/PicAudio/issues")
             }
             MenuSeparator {}
             MenuItem {
-                text: "About Parakeet"
+                text: "About PicAudio"
                 onTriggered: root.requestAbout()
             }
         }

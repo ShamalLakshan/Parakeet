@@ -20,7 +20,7 @@ ApplicationWindow {
     minimumWidth: 1024
     minimumHeight: 640
     visible: true
-    title: "Parakeet Music Player"
+    title: "PicAudio Music Player"
     color: Theme.background
     flags: Qt.Window | (stayOnTop ? Qt.WindowStaysOnTopHint : 0)
 
@@ -489,10 +489,10 @@ ApplicationWindow {
     Platform.SystemTrayIcon {
         id: systemTrayIcon
         visible: true
-        tooltip: "Parakeet Music Player"
+        tooltip: "PicAudio Music Player"
         menu: Platform.Menu {
             Platform.MenuItem {
-                text: bridge.isPlaying ? (bridge.currentTrackTitle + " - " + bridge.currentArtist) : "Parakeet (Stopped)"
+                text: bridge.isPlaying ? (bridge.currentTrackTitle + " - " + bridge.currentArtist) : "PicAudio (Stopped)"
                 enabled: false
             }
             Platform.MenuSeparator {}
@@ -541,7 +541,7 @@ ApplicationWindow {
             }
             Platform.MenuSeparator {}
             Platform.MenuItem {
-                text: "Quit Parakeet"
+                text: "Quit PicAudio"
                 onTriggered: Qt.quit()
             }
         }
@@ -693,7 +693,7 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+-"; onActivated: zoomOut() }
     Shortcut { sequence: "Ctrl+0"; onActivated: zoomReset() }
     Shortcut { sequence: "Ctrl+Shift+E"; onActivated: showEqualizer = !showEqualizer }
-    Shortcut { sequence: "F1"; onActivated: Qt.openUrlExternally("https://github.com/ShamalLakshan/Parakeet") }
+    Shortcut { sequence: "F1"; onActivated: Qt.openUrlExternally("https://github.com/ShamalLakshan/PicAudio") }
     Shortcut { sequence: "Ctrl+/"; onActivated: shortcutsDialog.open() }
     Shortcut { sequence: "Ctrl+?"; onActivated: shortcutsDialog.open() }
 
@@ -726,14 +726,16 @@ ApplicationWindow {
                 // Brand logo / title
                 RowLayout {
                     spacing: 6
-                    VectorIcon {
-                        name: "music"
-                        width: 13
-                        height: 13
-                        color: Theme.accent
+                    Image {
+                        source: "qrc:/icons/picaudio.png"
+                        width: 14
+                        height: 14
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        mipmap: true
                     }
                     Text {
-                        text: "PARAKEET"
+                        text: "PICAUDIO"
                         font.pixelSize: 11
                         font.bold: true
                         font.letterSpacing: 1.5

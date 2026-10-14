@@ -3,15 +3,15 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>Parakeet</string>
+    <string>PicAudio</string>
     <key>CFBundleGetInfoString</key>
-    <string>Parakeet Music Player</string>
+    <string>PicAudio Music Player</string>
     <key>CFBundleIconFile</key>
-    <string>parakeet.icns</string>
+    <string>picaudio.icns</string>
     <key>CFBundleIdentifier</key>
-    <string>com.parakeetaudio.parakeet</string>
+    <string>com.picaudio.picaudio</string>
     <key>CFBundleName</key>
-    <string>Parakeet</string>
+    <string>PicAudio</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

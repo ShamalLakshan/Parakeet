@@ -15,7 +15,7 @@ protected:
   fs::path m_testDir;
 
   void SetUp() override {
-    m_testDir = fs::temp_directory_path() / "parakeet_test_art";
+    m_testDir = fs::temp_directory_path() / "picaudio_test_art";
     fs::remove_all(m_testDir);
     fs::create_directories(m_testDir);
   }

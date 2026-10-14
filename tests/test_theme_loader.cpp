@@ -62,7 +62,7 @@ protected:
     if (!QCoreApplication::instance()) {
       qputenv("QT_QPA_PLATFORM", "offscreen");
       static int argc = 1;
-      static char *argv[] = {const_cast<char *>("parakeet_tests"), nullptr};
+      static char *argv[] = {const_cast<char *>("picaudio_tests"), nullptr};
       new QGuiApplication(argc, argv);
     }
   }

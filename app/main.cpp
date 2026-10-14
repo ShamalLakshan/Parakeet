@@ -22,14 +22,14 @@
 
 int main(int argc, char *argv[]) {
   QApplication app(argc, argv);
-  app.setOrganizationName("ParakeetAudio");
-  app.setApplicationName("Parakeet");
-  app.setWindowIcon(QIcon(":/icons/parakeet.svg"));
+  app.setOrganizationName("PicAudio");
+  app.setApplicationName("PicAudio");
+  app.setWindowIcon(QIcon(":/icons/picaudio.png"));
 
   if (app.arguments().contains(QStringLiteral("--help")) ||
       app.arguments().contains(QStringLiteral("-h"))) {
-    std::cout << "Parakeet - Lightweight high-fidelity music player\n\n"
-              << "Usage: parakeet [OPTIONS] [FILES/FOLDERS...]\n\n"
+    std::cout << "PicAudio - Lightweight high-fidelity music player\n\n"
+              << "Usage: picaudio [OPTIONS] [FILES/FOLDERS...]\n\n"
               << "Options:\n"
               << "  --play             Resume or start playback\n"
               << "  --pause            Pause active playback\n"
@@ -58,14 +58,14 @@ int main(int argc, char *argv[]) {
   const bool isPortable = QFile::exists(baseDir + "/portable.dat") ||
                           QDir(portableDir).exists() ||
                           app.arguments().contains("--portable") ||
-                          qEnvironmentVariableIsSet("PARAKEET_PORTABLE");
+                          qEnvironmentVariableIsSet("PICAUDIO_PORTABLE");
 
   QString appDataDir;
   if (isPortable) {
     appDataDir = portableDir;
     QDir().mkpath(appDataDir);
-    qputenv("PARAKEET_PORTABLE", "1");
-    qputenv("PARAKEET_DATA_DIR", portableDir.toUtf8());
+    qputenv("PICAUDIO_PORTABLE", "1");
+    qputenv("PICAUDIO_DATA_DIR", portableDir.toUtf8());
     qputenv("XDG_DATA_HOME", (portableDir + "/share").toUtf8());
     qputenv("XDG_CONFIG_HOME", (portableDir + "/config").toUtf8());
     qputenv("XDG_CACHE_HOME", (portableDir + "/cache").toUtf8());
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(appDataDir);
   }
-  QString dbPath = appDataDir + "/parakeet_library.db";
+  QString dbPath = appDataDir + "/picaudio_library.db";
 
   auto dbAdapter = std::make_unique<adapters::SqliteDatabaseAdapter>();
   dbAdapter->initialize(dbPath.toStdString());

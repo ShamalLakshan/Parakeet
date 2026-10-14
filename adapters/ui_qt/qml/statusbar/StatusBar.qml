@@ -57,7 +57,7 @@ Rectangle {
         }
 
         Text {
-            text: "Parakeet v0.1.0"
+            text: "PicAudio v0.1.0"
             font.pixelSize: 9
             color: Theme.textMuted
         }

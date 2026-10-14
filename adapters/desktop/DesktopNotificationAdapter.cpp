@@ -3,7 +3,7 @@
 #include <QFileInfo>
 #include <algorithm>
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusMessage>
@@ -18,7 +18,7 @@ DesktopNotificationAdapter::DesktopNotificationAdapter(QObject *parent)
 void DesktopNotificationAdapter::initialize(QSystemTrayIcon *trayIcon) {
   m_trayIcon = trayIcon;
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
   QDBusConnection bus = QDBusConnection::sessionBus();
   if (bus.isConnected()) {
     // Listen for notification action button clicks
@@ -79,7 +79,7 @@ void DesktopNotificationAdapter::showTrackNotification(
     body += audioSpecs;
   }
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
   if (m_dbusNotificationsAvailable) {
     QDBusMessage msg = QDBusMessage::createMethodCall(
         QStringLiteral("org.freedesktop.Notifications"),
@@ -92,7 +92,7 @@ void DesktopNotificationAdapter::showTrackNotification(
                         QStringLiteral("Play/Pause")};
 
     QVariantMap hints;
-    hints.insert(QStringLiteral("desktop-entry"), QStringLiteral("parakeet"));
+    hints.insert(QStringLiteral("desktop-entry"), QStringLiteral("picaudio"));
 
     // Provide local album art image file path if valid
     if (!artFilePath.isEmpty() && QFileInfo::exists(artFilePath)) {
@@ -101,9 +101,9 @@ void DesktopNotificationAdapter::showTrackNotification(
 
     int timeoutMs = m_durationSec * 1000;
 
-    msg << QStringLiteral("Parakeet");
+    msg << QStringLiteral("PicAudio");
     msg << m_lastNotificationId;
-    msg << QStringLiteral("parakeet");
+    msg << QStringLiteral("picaudio");
     msg << summary;
     msg << body;
     msg << actions;
@@ -126,7 +126,7 @@ void DesktopNotificationAdapter::showTrackNotification(
   }
 }
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
 void DesktopNotificationAdapter::onActionInvoked(uint id,
                                                  const QString &actionKey) {
   Q_UNUSED(id);

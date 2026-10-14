@@ -50,7 +50,7 @@ public:
   [[nodiscard]] int durationSec() const { return m_durationSec; }
 
   /**
-   * @brief Configures suppression when Parakeet main window has focus.
+   * @brief Configures suppression when PicAudio main window has focus.
    */
   void setSuppressWhenFocused(bool suppress) {
     m_suppressWhenFocused = suppress;
@@ -60,7 +60,7 @@ public:
   }
 
   /**
-   * @brief Updates whether Parakeet currently has window focus.
+   * @brief Updates whether PicAudio currently has window focus.
    */
   void setWindowFocused(bool focused) { m_isWindowFocused = focused; }
 
@@ -79,7 +79,7 @@ signals:
   void togglePlayPauseRequested();
 
 private slots:
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
   void onActionInvoked(uint id, const QString &actionKey);
 #endif
 

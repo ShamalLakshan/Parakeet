@@ -18,7 +18,7 @@ namespace {
 void ensureGuiApp() {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   int argc = 1;
-  static char appName[] = "parakeet_tests";
+  static char appName[] = "picaudio_tests";
   static char *argv[] = {appName, nullptr};
   if (!QCoreApplication::instance()) {
     new QGuiApplication(argc, argv);
@@ -110,13 +110,13 @@ TEST(SingleInstanceManagerTest, ParseFileAndEnqueueArguments) {
 TEST(SingleInstanceManagerTest, SocketServerNameIsNonEmpty) {
   QString name = adapters::SingleInstanceManager::socketServerName();
   EXPECT_FALSE(name.isEmpty());
-  EXPECT_TRUE(name.startsWith(QStringLiteral("Parakeet_SingleInstance_")));
+  EXPECT_TRUE(name.startsWith(QStringLiteral("PicAudio_SingleInstance_")));
 }
 
 TEST(DesktopTrayAdapterTest, FormattedTooltipOutput) {
   adapters::DesktopTrayAdapter tray;
   // Initially stopped
-  EXPECT_EQ(tray.formattedTooltip(), QStringLiteral("Parakeet\nStopped"));
+  EXPECT_EQ(tray.formattedTooltip(), QStringLiteral("PicAudio\nStopped"));
 
   // Track playing
   tray.updateTrackInfo(QStringLiteral("Subdivisions"), QStringLiteral("Rush"),
@@ -125,7 +125,7 @@ TEST(DesktopTrayAdapterTest, FormattedTooltipOutput) {
   tray.updatePlaybackState(true);
 
   QString expected =
-      QStringLiteral("Parakeet\nRush - Subdivisions\n[01:23 / 05:35]");
+      QStringLiteral("PicAudio\nRush - Subdivisions\n[01:23 / 05:35]");
   EXPECT_EQ(tray.formattedTooltip(), expected);
 }
 

@@ -31,7 +31,7 @@ QString SingleInstanceManager::socketServerName() {
   if (user.isEmpty()) {
     user = QStringLiteral("default");
   }
-  return QStringLiteral("Parakeet_SingleInstance_%1").arg(user);
+  return QStringLiteral("PicAudio_SingleInstance_%1").arg(user);
 }
 
 bool SingleInstanceManager::checkOrStartPrimary(const QStringList &args,
@@ -81,10 +81,10 @@ CliCommand SingleInstanceManager::parseArguments(const QStringList &args,
 
     // Skip application binary invocation argument
     if (i == 0 &&
-        (arg.endsWith(QStringLiteral("parakeet"), Qt::CaseInsensitive) ||
-         arg.endsWith(QStringLiteral("parakeet.exe"), Qt::CaseInsensitive) ||
-         arg.endsWith(QStringLiteral("Parakeet"), Qt::CaseInsensitive) ||
-         arg.endsWith(QStringLiteral("Parakeet.exe"), Qt::CaseInsensitive))) {
+        (arg.endsWith(QStringLiteral("picaudio"), Qt::CaseInsensitive) ||
+         arg.endsWith(QStringLiteral("picaudio.exe"), Qt::CaseInsensitive) ||
+         arg.endsWith(QStringLiteral("PicAudio"), Qt::CaseInsensitive) ||
+         arg.endsWith(QStringLiteral("PicAudio.exe"), Qt::CaseInsensitive))) {
       continue;
     }
 

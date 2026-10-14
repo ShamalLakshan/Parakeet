@@ -29,8 +29,8 @@ ThemeLoader::ThemeLoader(QObject *parent)
 }
 
 QString ThemeLoader::getUserThemesDir() const {
-  if (qEnvironmentVariableIsSet("PARAKEET_DATA_DIR")) {
-    return qEnvironmentVariable("PARAKEET_DATA_DIR") + "/themes";
+  if (qEnvironmentVariableIsSet("PICAUDIO_DATA_DIR")) {
+    return qEnvironmentVariable("PICAUDIO_DATA_DIR") + "/themes";
   }
   return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
          "/themes";
@@ -46,7 +46,7 @@ QStringList ThemeLoader::getThemeSearchPaths() const {
   QString appDir = QCoreApplication::applicationDirPath();
   if (!appDir.isEmpty()) {
     paths << appDir + "/themes";
-    paths << appDir + "/../share/parakeet/themes";
+    paths << appDir + "/../share/picaudio/themes";
     paths << appDir +
                  "/../../themes"; // dev build location relative to build/app
   }
@@ -123,7 +123,7 @@ ThemeTokens ThemeLoader::getDefaultDarkStudioTheme() {
   ThemeTokens t;
   t.id = "dark-studio";
   t.name = "Dark Studio";
-  t.author = "Parakeet";
+  t.author = "PicAudio";
   t.version = "1.0.0";
   t.apiVersion = "0.1-unstable";
   t.description = "Default dark theme";
@@ -163,7 +163,7 @@ ThemeTokens ThemeLoader::getBuiltInNordTheme() {
   ThemeTokens t;
   t.id = "nord-audiophile";
   t.name = "Nord";
-  t.author = "Parakeet Community";
+  t.author = "PicAudio Community";
   t.version = "1.0.0";
   t.apiVersion = "0.1-unstable";
   t.description =
@@ -204,7 +204,7 @@ ThemeTokens ThemeLoader::getBuiltInSolarizedDarkTheme() {
   ThemeTokens t;
   t.id = "solarized-dark";
   t.name = "Solarized Dark";
-  t.author = "Parakeet Community";
+  t.author = "PicAudio Community";
   t.version = "1.0.0";
   t.apiVersion = "0.1-unstable";
   t.description = "Warm low-contrast palette calibrated for eye comfort";

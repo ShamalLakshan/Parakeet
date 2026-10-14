@@ -5,7 +5,7 @@ pkg_check_modules(SQLITE REQUIRED sqlite3)
 pkg_check_modules(TAGLIB REQUIRED taglib)
 
 if(Qt6DBus_FOUND)
-    add_compile_definitions(PARAKEET_ENABLE_DBUS)
+    add_compile_definitions(PICAUDIO_ENABLE_DBUS)
 endif()
 
 # UI, Theming, Data, Audio & Desktop Adapters
@@ -46,15 +46,15 @@ qt_add_library(ui_adapter STATIC
 )
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/
-    DESTINATION share/parakeet/themes
+    DESTINATION share/picaudio/themes
     FILES_MATCHING PATTERN "*.json"
 )
 
 if(UNIX AND NOT APPLE)
-    install(FILES ${CMAKE_SOURCE_DIR}/deploy/linux/parakeet.desktop
+    install(FILES ${CMAKE_SOURCE_DIR}/deploy/linux/picaudio.desktop
         DESTINATION share/applications
     )
-    install(FILES ${CMAKE_SOURCE_DIR}/deploy/linux/icons/parakeet.svg
+    install(FILES ${CMAKE_SOURCE_DIR}/deploy/linux/icons/picaudio.svg
         DESTINATION share/icons/hicolor/scalable/apps
     )
 endif()

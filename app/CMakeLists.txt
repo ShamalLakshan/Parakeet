@@ -1,11 +1,11 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-add_executable(Parakeet
+add_executable(PicAudio
     main.cpp
     ${CMAKE_SOURCE_DIR}/deploy/icons.qrc
 )
 
-target_link_libraries(Parakeet PRIVATE
+target_link_libraries(PicAudio PRIVATE
     player_core
     ui_adapter
     Qt6::Widgets
@@ -13,7 +13,7 @@ target_link_libraries(Parakeet PRIVATE
     ${TAGLIB_LIBRARIES}
 )
 
-install(TARGETS Parakeet
+install(TARGETS PicAudio
     RUNTIME DESTINATION bin
     BUNDLE DESTINATION .
 )

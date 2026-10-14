@@ -632,7 +632,7 @@ Dialog {
                                 color: Theme.textPrimary
                             }
                             Text {
-                                text: "Behavior when launching Parakeet."
+                                text: "Behavior when launching PicAudio."
                                 font.pixelSize: Theme.fontSizeSmall - 1
                                 color: Theme.textMuted
                                 wrapMode: Text.WordWrap
@@ -720,7 +720,7 @@ Dialog {
                     // Single-Instance
                     StyledCheckBox {
                         Layout.fillWidth: true
-                        text: "Allow only a single instance of Parakeet (forward tracks to running instance)"
+                        text: "Allow only a single instance of PicAudio (forward tracks to running instance)"
                         checked: bridge.singleInstance
                         onToggled: bridge.setSingleInstance(checked)
                     }
@@ -834,7 +834,7 @@ Dialog {
                         Layout.fillWidth: true
                         opacity: bridge.showNotifications ? 1.0 : 0.4
                         enabled: bridge.showNotifications
-                        text: "Suppress notifications when Parakeet is the focused foreground window"
+                        text: "Suppress notifications when PicAudio is the focused foreground window"
                         checked: bridge.suppressNotificationsWhenFocused
                         onToggled: bridge.setSuppressNotificationsWhenFocused(checked)
                     }
@@ -3163,7 +3163,7 @@ Dialog {
                     spacing: 16
 
                     Text {
-                        text: "Plugins & Extensions (Parakeet SDK)"
+                        text: "Plugins & Extensions (PicAudio SDK)"
                         font.pixelSize: Theme.fontSizeLarge
                         font.bold: true
                         color: Theme.textPrimary

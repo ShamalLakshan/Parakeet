@@ -248,7 +248,7 @@ void DesktopIntegrationManager::onPlaybackChanged() {
       QString hash = m_bridge->currentArtHash();
       if (!hash.isEmpty()) {
         QString possible =
-            QString::fromLocal8Bit(qgetenv("PARAKEET_DATA_DIR")) + "/covers/" +
+            QString::fromLocal8Bit(qgetenv("PICAUDIO_DATA_DIR")) + "/covers/" +
             hash + ".jpg";
         if (QFileInfo::exists(possible)) {
           artPath = possible;

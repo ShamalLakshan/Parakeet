@@ -6,7 +6,7 @@
 #include <QStringList>
 #include <QVariantMap>
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
 #include <QDBusAbstractAdaptor>
 #include <QDBusConnection>
 #include <QDBusObjectPath>
@@ -14,7 +14,7 @@
 
 namespace adapters {
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
 
 class MprisAdapter;
 
@@ -123,7 +123,7 @@ private:
   MprisAdapter *m_adapter;
 };
 
-#endif // PARAKEET_ENABLE_DBUS
+#endif // PICAUDIO_ENABLE_DBUS
 
 /**
  * @brief Linux MPRIS2 D-Bus adapter for desktop media keys and metadata.
@@ -160,7 +160,7 @@ public:
   void triggerSeek(qlonglong offsetUs);
   void triggerSetPosition(const QString &trackId, qlonglong positionUs);
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
   MprisPlayerAdaptor *playerAdaptor() const { return m_playerAdaptor; }
 #endif
 
@@ -179,7 +179,7 @@ private:
   QString m_currentTrackId{"/org/mpris/MediaPlayer2/Track/0"};
   bool m_registered{false};
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
   MprisRootAdaptor *m_rootAdaptor{nullptr};
   MprisPlayerAdaptor *m_playerAdaptor{nullptr};
 #endif

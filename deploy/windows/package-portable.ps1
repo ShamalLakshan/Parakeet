@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Packages Parakeet into a standalone portable ZIP archive for Windows.
+    Packages PicAudio into a standalone portable ZIP archive for Windows.
 .DESCRIPTION
     Deploys Qt libraries, QML modules, plugins, and third-party dependencies into a
     self-contained portable directory and produces a release ZIP.
@@ -19,21 +19,21 @@ $BuildPath = Join-Path $RepoRoot $BuildDir
 $OutputPath = Join-Path $RepoRoot $OutputDir
 $StagePath = Join-Path $BuildPath "portable-stage"
 
-Write-Host "=== Parakeet Windows Portable Packager ===" -ForegroundColor Cyan
+Write-Host "=== PicAudio Windows Portable Packager ===" -ForegroundColor Cyan
 Write-Host "Repo Root: $RepoRoot"
 Write-Host "Build Dir: $BuildPath"
 Write-Host "Architecture: $Arch"
 
 # Check executable
-$ExePath = Join-Path $BuildPath "app\Release\Parakeet.exe"
+$ExePath = Join-Path $BuildPath "app\Release\PicAudio.exe"
 if (-not (Test-Path $ExePath)) {
-    $ExePath = Join-Path $BuildPath "app\Parakeet.exe"
+    $ExePath = Join-Path $BuildPath "app\PicAudio.exe"
 }
 if (-not (Test-Path $ExePath)) {
-    $ExePath = Join-Path $BuildPath "bin\Parakeet.exe"
+    $ExePath = Join-Path $BuildPath "bin\PicAudio.exe"
 }
 if (-not (Test-Path $ExePath)) {
-    Write-Error "Parakeet.exe not found in $BuildPath. Please build the project first."
+    Write-Error "PicAudio.exe not found in $BuildPath. Please build the project first."
 }
 
 # Clean and recreate staging directory
@@ -45,12 +45,12 @@ New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
 
 # 1. Copy executable and dependencies
 Write-Host "--> Copying executable and libraries..."
-Copy-Item $ExePath -Destination (Join-Path $StagePath "Parakeet.exe")
+Copy-Item $ExePath -Destination (Join-Path $StagePath "PicAudio.exe")
 
 # 2. Run windeployqt
 $QmlDir = Join-Path $RepoRoot "adapters\ui_qt\qml"
 Write-Host "--> Running windeployqt with QML scanning..."
-& windeployqt --qmldir $QmlDir --compiler-runtime --no-translations (Join-Path $StagePath "Parakeet.exe")
+& windeployqt --qmldir $QmlDir --compiler-runtime --no-translations (Join-Path $StagePath "PicAudio.exe")
 
 # 3. Copy themes
 Write-Host "--> Bundling themes..."
@@ -64,7 +64,7 @@ New-Item -ItemType File -Path (Join-Path $StagePath "portable.dat") -Force | Out
 New-Item -ItemType Directory -Path (Join-Path $StagePath "data") -Force | Out-Null
 
 # 5. Create ZIP archive
-$ZipFile = Join-Path $OutputPath "Parakeet-windows-$Arch-portable.zip"
+$ZipFile = Join-Path $OutputPath "PicAudio-windows-$Arch-portable.zip"
 if (Test-Path $ZipFile) {
     Remove-Item -Force $ZipFile
 }

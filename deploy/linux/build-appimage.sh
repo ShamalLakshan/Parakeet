@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Parakeet Linux AppImage Generator
+# PicAudio Linux AppImage Generator
 # Builds a self-contained portable AppImage for Linux x86_64
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,7 +12,7 @@ APP_DIR="${REPO_ROOT}/build-appimage/AppDir"
 OUTPUT_DIR="${REPO_ROOT}/dist"
 TOOLS_DIR="${BUILD_DIR}/tools"
 
-echo "=== Parakeet AppImage Packaging ==="
+echo "=== PicAudio AppImage Packaging ==="
 echo "Repository Root: ${REPO_ROOT}"
 echo "Build Directory: ${BUILD_DIR}"
 echo "Output Directory: ${OUTPUT_DIR}"
@@ -39,13 +39,13 @@ DESTDIR="${APP_DIR}" cmake --install "${BUILD_DIR}"
 mkdir -p "${APP_DIR}/usr/share/applications"
 mkdir -p "${APP_DIR}/usr/share/icons/hicolor/scalable/apps"
 
-cp "${SCRIPT_DIR}/parakeet.desktop" "${APP_DIR}/usr/share/applications/parakeet.desktop"
-cp "${SCRIPT_DIR}/icons/parakeet.svg" "${APP_DIR}/usr/share/icons/hicolor/scalable/apps/parakeet.svg"
+cp "${SCRIPT_DIR}/picaudio.desktop" "${APP_DIR}/usr/share/applications/picaudio.desktop"
+cp "${SCRIPT_DIR}/icons/picaudio.svg" "${APP_DIR}/usr/share/icons/hicolor/scalable/apps/picaudio.svg"
 
 # AppImage root links
-cp "${SCRIPT_DIR}/parakeet.desktop" "${APP_DIR}/parakeet.desktop"
-cp "${SCRIPT_DIR}/icons/parakeet.svg" "${APP_DIR}/parakeet.svg"
-cp "${SCRIPT_DIR}/icons/parakeet.svg" "${APP_DIR}/.DirIcon"
+cp "${SCRIPT_DIR}/picaudio.desktop" "${APP_DIR}/picaudio.desktop"
+cp "${SCRIPT_DIR}/icons/picaudio.svg" "${APP_DIR}/picaudio.svg"
+cp "${SCRIPT_DIR}/icons/picaudio.svg" "${APP_DIR}/.DirIcon"
 
 # 3. Fetch linuxdeploy and Qt plugin if not present
 echo "--> Setting up linuxdeploy..."
@@ -137,9 +137,9 @@ export EXTRA_PLATFORM_PLUGINS="libqwayland.so"
 # Run linuxdeploy with Qt plugin
 "${LINUXDEPLOY}" \
     --appdir "${APP_DIR}" \
-    --executable "${APP_DIR}/usr/bin/Parakeet" \
-    --desktop-file "${APP_DIR}/usr/share/applications/parakeet.desktop" \
-    --icon-file "${APP_DIR}/usr/share/icons/hicolor/scalable/apps/parakeet.svg" \
+    --executable "${APP_DIR}/usr/bin/PicAudio" \
+    --desktop-file "${APP_DIR}/usr/share/applications/picaudio.desktop" \
+    --icon-file "${APP_DIR}/usr/share/icons/hicolor/scalable/apps/picaudio.svg" \
     --plugin qt
 
 # 5. Bundle Wayland shell integrations
@@ -178,7 +178,7 @@ if [ -z "${QT_QPA_PLATFORM:-}" ]; then
     export QT_QPA_PLATFORM="wayland;xcb"
 fi
 
-exec "${HERE}/usr/bin/Parakeet" "$@"
+exec "${HERE}/usr/bin/PicAudio" "$@"
 EOF
 chmod +x "${CUSTOM_APPRUN}"
 
@@ -189,13 +189,13 @@ echo "--> Packaging final AppImage..."
     --output appimage
 
 # Move generated AppImage to output directory
-mv Parakeet-*.AppImage "${OUTPUT_DIR}/Parakeet-x86_64.AppImage" 2>/dev/null || \
-mv *Parakeet*.AppImage "${OUTPUT_DIR}/Parakeet-x86_64.AppImage" 2>/dev/null || true
+mv PicAudio-*.AppImage "${OUTPUT_DIR}/PicAudio-x86_64.AppImage" 2>/dev/null || \
+mv *PicAudio*.AppImage "${OUTPUT_DIR}/PicAudio-x86_64.AppImage" 2>/dev/null || true
 
-if [ -f "${OUTPUT_DIR}/Parakeet-x86_64.AppImage" ]; then
+if [ -f "${OUTPUT_DIR}/PicAudio-x86_64.AppImage" ]; then
     echo "=== AppImage created successfully! ==="
-    echo "Location: ${OUTPUT_DIR}/Parakeet-x86_64.AppImage"
-    ls -lh "${OUTPUT_DIR}/Parakeet-x86_64.AppImage"
+    echo "Location: ${OUTPUT_DIR}/PicAudio-x86_64.AppImage"
+    ls -lh "${OUTPUT_DIR}/PicAudio-x86_64.AppImage"
 else
     echo "AppDir prepared at: ${APP_DIR}"
 fi

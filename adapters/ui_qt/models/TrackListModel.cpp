@@ -186,11 +186,11 @@ QVariant TrackListModel::data(const QModelIndex &index, int role) const {
     return QString("");
   }
   case PlayCountRole: {
-    QSettings s("Parakeet", "ParakeetPlayer");
+    QSettings s("PicAudio", "PicAudioPlayer");
     return s.value("playcounts/" + QString::fromStdString(track.id), 0).toInt();
   }
   case RatingRole: {
-    QSettings s("Parakeet", "ParakeetPlayer");
+    QSettings s("PicAudio", "PicAudioPlayer");
     return s.value("ratings/" + QString::fromStdString(track.id), 0).toInt();
   }
   default:
@@ -261,7 +261,7 @@ QVariantMap TrackListModel::getTrackAt(int index) const {
     map["dateAddedFormatted"] = QString("");
   }
 
-  QSettings s("Parakeet", "ParakeetPlayer");
+  QSettings s("PicAudio", "PicAudioPlayer");
   map["playCount"] =
       s.value("playcounts/" + QString::fromStdString(t.id), 0).toInt();
   map["rating"] = s.value("ratings/" + QString::fromStdString(t.id), 0).toInt();
@@ -524,13 +524,13 @@ void TrackListModel::applySort() {
       if (a.dateAdded != b.dateAdded)
         cmp = a.dateAdded < b.dateAdded ? -1 : 1;
     } else if (m_sortColumn == "rating") {
-      QSettings s("Parakeet", "ParakeetPlayer");
+      QSettings s("PicAudio", "PicAudioPlayer");
       int ra = s.value("ratings/" + QString::fromStdString(a.id), 0).toInt();
       int rb = s.value("ratings/" + QString::fromStdString(b.id), 0).toInt();
       if (ra != rb)
         cmp = ra < rb ? -1 : 1;
     } else if (m_sortColumn == "playCount") {
-      QSettings s("Parakeet", "ParakeetPlayer");
+      QSettings s("PicAudio", "PicAudioPlayer");
       int pa = s.value("playcounts/" + QString::fromStdString(a.id), 0).toInt();
       int pb = s.value("playcounts/" + QString::fromStdString(b.id), 0).toInt();
       if (pa != pb)

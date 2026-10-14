@@ -1106,7 +1106,7 @@ Menu {
     // --- System Tray Icon Context Menu (Issue #13) ---
 
     ContextMenuItem {
-        text: bridge.isPlaying ? ("Now Playing: " + bridge.currentTrackTitle + " - " + bridge.currentArtist) : "Parakeet (Stopped)"
+        text: bridge.isPlaying ? ("Now Playing: " + bridge.currentTrackTitle + " - " + bridge.currentArtist) : "PicAudio (Stopped)"
         visible: root.menuType === "tray"
         enabled: false
     }
@@ -1165,7 +1165,7 @@ Menu {
     }
 
     ContextMenuItem {
-        text: "Show / Hide Parakeet Window"
+        text: "Show / Hide PicAudio Window"
         visible: root.menuType === "tray"
         onTriggered: root.toggleWindowRequested()
     }
@@ -1181,7 +1181,7 @@ Menu {
     }
 
     ContextMenuItem {
-        text: "Quit Parakeet"
+        text: "Quit PicAudio"
         visible: root.menuType === "tray"
         onTriggered: Qt.quit()
     }

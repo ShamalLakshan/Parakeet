@@ -489,7 +489,7 @@ Item {
                                             }
                                             Text {
                                                 Layout.alignment: Qt.AlignHCenter
-                                                text: bridge.currentAlbum.length > 0 ? bridge.currentAlbum : "Parakeet Audio"
+                                                text: bridge.currentAlbum.length > 0 ? bridge.currentAlbum : "PicAudio"
                                                 font.pixelSize: Theme.fontSizeSmall
                                                 font.bold: true
                                                 color: Theme.textMuted
@@ -1278,7 +1278,7 @@ Item {
                                             Layout.fillWidth: true
                                             horizontalAlignment: Text.AlignHCenter
                                             wrapMode: Text.WordWrap
-                                            text: "Parakeet looks for local .lrc/.txt files or embedded ID3v2/Vorbis tags alongside the audio track."
+                                            text: "PicAudio looks for local .lrc/.txt files or embedded ID3v2/Vorbis tags alongside the audio track."
                                             font.pixelSize: Theme.fontSizeSmall
                                             color: Theme.textMuted
                                         }

@@ -49,12 +49,12 @@ QtBridge::QtBridge(core::PlayerService &player, core::LibraryService &library,
   if (m_themeLoader) {
     connect(m_themeLoader, &adapters::ThemeLoader::themeChanged, this,
             [this]() {
-              QSettings s("ParakeetAudio", "Parakeet");
+              QSettings s("PicAudio", "PicAudio");
               s.setValue("appearance/themeId", m_themeLoader->themeId());
             });
     connect(m_themeLoader, &adapters::ThemeLoader::uiScaleChanged, this,
             [this]() {
-              QSettings s("ParakeetAudio", "Parakeet");
+              QSettings s("PicAudio", "PicAudio");
               s.setValue("appearance/uiScale", m_themeLoader->uiScale());
               s.setValue("appearance/densityPreset",
                          m_themeLoader->densityPreset());
@@ -85,7 +85,7 @@ QtBridge::~QtBridge() {
 }
 
 void QtBridge::loadSettings() {
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
 
   // Playback & DSP
   m_gaplessPlayback = s.value("playback/gaplessPlayback", true).toBool();
@@ -235,7 +235,7 @@ void QtBridge::loadSettings() {
 }
 
 void QtBridge::saveSettings() {
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
 
   // Playback & DSP
   s.setValue("playback/gaplessPlayback", m_gaplessPlayback);
@@ -1706,12 +1706,12 @@ QString QtBridge::getLogFilePath() const {
   QString logDir =
       QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir().mkpath(logDir);
-  QString logPath = logDir + "/parakeet.log";
+  QString logPath = logDir + "/picaudio.log";
   if (!QFile::exists(logPath)) {
     QFile f(logPath);
     if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
       QTextStream out(&f);
-      out << "[Parakeet Session Log]\n";
+      out << "[PicAudio Session Log]\n";
       out << "Version: 0.1.0\n";
       out << "Backend: " << m_audioBackend << "\n";
       f.close();
@@ -2420,7 +2420,7 @@ bool QtBridge::deleteFilesFromDisk(const QStringList &trackIds) {
 }
 
 void QtBridge::setTracksRating(const QStringList &trackIds, int rating) {
-  QSettings s("Parakeet", "ParakeetPlayer");
+  QSettings s("PicAudio", "PicAudioPlayer");
   s.beginGroup("ratings");
   for (const auto &id : trackIds) {
     if (rating <= 0) {
@@ -2434,12 +2434,12 @@ void QtBridge::setTracksRating(const QStringList &trackIds, int rating) {
 }
 
 int QtBridge::getTrackRating(const QString &trackId) const {
-  QSettings s("Parakeet", "ParakeetPlayer");
+  QSettings s("PicAudio", "PicAudioPlayer");
   return s.value("ratings/" + trackId, 0).toInt();
 }
 
 void QtBridge::toggleTracksFavorite(const QStringList &trackIds) {
-  QSettings s("Parakeet", "ParakeetPlayer");
+  QSettings s("PicAudio", "PicAudioPlayer");
   s.beginGroup("favorites");
   for (const auto &id : trackIds) {
     bool fav = s.value(id, false).toBool();
@@ -2450,7 +2450,7 @@ void QtBridge::toggleTracksFavorite(const QStringList &trackIds) {
 }
 
 bool QtBridge::isTrackFavorite(const QString &trackId) const {
-  QSettings s("Parakeet", "ParakeetPlayer");
+  QSettings s("PicAudio", "PicAudioPlayer");
   return s.value("favorites/" + trackId, false).toBool();
 }
 
@@ -2745,7 +2745,7 @@ void QtBridge::optimizeDatabase() {
 void QtBridge::exportDatabaseBackup(const QString &targetFilePath) {
   QString src =
       QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
-      "/parakeet_library.db";
+      "/picaudio_library.db";
   QString dest = targetFilePath;
   QUrl u = QUrl::fromUserInput(targetFilePath);
   if (u.isLocalFile())
@@ -3242,7 +3242,7 @@ void QtBridge::exportDiagnosticsReport(const QString &targetFilePath) {
   QFile file(dest);
   if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
     QTextStream out(&file);
-    out << "Parakeet Audio Player - Diagnostics Report\n";
+    out << "PicAudio Player - Diagnostics Report\n";
     out << "==========================================\n\n";
     out << "OS: " << QSysInfo::prettyProductName() << " ("
         << QSysInfo::currentCpuArchitecture() << ")\n";
@@ -3313,7 +3313,7 @@ QString QtBridge::checkDatabaseIntegrity() {
 }
 
 void QtBridge::resetAllSettingsToDefaults() {
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
   s.clear();
 
   // Playback & DSP defaults
@@ -3644,7 +3644,7 @@ void QtBridge::setColumnOrder(const QStringList &orderKeys) {
 QStringList QtBridge::tableColumnOrder() const { return tableColumnKeys(); }
 
 void QtBridge::loadColumnSettings() {
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
   s.beginGroup("table_columns");
 
   QStringList savedOrder = s.value("order").toStringList();
@@ -3693,7 +3693,7 @@ void QtBridge::loadColumnSettings() {
 }
 
 void QtBridge::saveColumnSettings() {
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
   s.beginGroup("table_columns");
   s.setValue("order", tableColumnOrder());
   for (const auto &col : m_columns) {
@@ -3710,7 +3710,7 @@ void QtBridge::saveColumnSettings() {
 
 void QtBridge::saveWindowGeometry(int x, int y, int width, int height,
                                   bool isMaximized) {
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
   s.beginGroup("window_geometry");
   s.setValue("x", x);
   s.setValue("y", y);
@@ -3722,7 +3722,7 @@ void QtBridge::saveWindowGeometry(int x, int y, int width, int height,
 }
 
 QVariantMap QtBridge::loadWindowGeometry(int defaultWidth, int defaultHeight) {
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
   s.beginGroup("window_geometry");
   bool hasSaved = s.contains("width") && s.contains("height");
   int x = s.value("x", 0).toInt();
@@ -3847,7 +3847,7 @@ void QtBridge::setActivePlaylistName(const QString &name) {
 }
 
 void QtBridge::loadViewLayoutSettings() {
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
   s.beginGroup("view_layout");
   m_leftPanelWidth = s.value("leftPanelWidth", 210).toInt();
   m_showLeftPanel = s.value("showLeftPanel", true).toBool();
@@ -3862,7 +3862,7 @@ void QtBridge::loadViewLayoutSettings() {
 }
 
 void QtBridge::saveViewLayoutSettings() {
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
   s.beginGroup("view_layout");
   s.setValue("leftPanelWidth", m_leftPanelWidth);
   s.setValue("showLeftPanel", m_showLeftPanel);
@@ -3878,7 +3878,7 @@ void QtBridge::saveViewLayoutSettings() {
 }
 
 void QtBridge::savePlaybackSession() {
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
   s.beginGroup("session");
 
   auto currentTrackOpt = m_player.getCurrentTrack();
@@ -3962,7 +3962,7 @@ void QtBridge::restorePlaybackSession() {
     return;
   }
 
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
   s.beginGroup("session");
 
   if (!s.value("has_session", false).toBool()) {

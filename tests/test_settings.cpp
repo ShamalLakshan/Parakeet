@@ -97,26 +97,26 @@ protected:
   static void SetUpTestSuite() {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     int argc = 1;
-    static char appName[] = "parakeet_tests";
+    static char appName[] = "picaudio_tests";
     static char *argv[] = {appName, nullptr};
     if (!QCoreApplication::instance()) {
       new QGuiApplication(argc, argv);
     }
-    QCoreApplication::setOrganizationName("ParakeetAudio");
-    QCoreApplication::setApplicationName("ParakeetTest");
+    QCoreApplication::setOrganizationName("PicAudio");
+    QCoreApplication::setApplicationName("PicAudioTest");
   }
 
   void SetUp() override {
-    QSettings s1("ParakeetAudio", "ParakeetTest");
+    QSettings s1("PicAudio", "PicAudioTest");
     s1.clear();
-    QSettings s2("ParakeetAudio", "Parakeet");
+    QSettings s2("PicAudio", "PicAudio");
     s2.clear();
   }
 
   void TearDown() override {
-    QSettings s1("ParakeetAudio", "ParakeetTest");
+    QSettings s1("PicAudio", "PicAudioTest");
     s1.clear();
-    QSettings s2("ParakeetAudio", "Parakeet");
+    QSettings s2("PicAudio", "PicAudio");
     s2.clear();
   }
 };
@@ -451,7 +451,7 @@ TEST_F(SettingsTest, DiagnosticsAndFactoryReset) {
   EXPECT_TRUE(integrityStatus.contains("Integrity check passed"));
 
   // Diagnostics report export
-  QString reportPath = QDir::tempPath() + "/parakeet_diag_test.txt";
+  QString reportPath = QDir::tempPath() + "/picaudio_diag_test.txt";
   bridge.exportDiagnosticsReport(reportPath);
   EXPECT_TRUE(QFile::exists(reportPath));
   QFile::remove(reportPath);
@@ -594,9 +594,9 @@ TEST_F(SettingsTest, FileAndEditMenuActions) {
   t.bitrate = 1411;
   bridge.trackModel()->setTracks({t});
 
-  QString m3u8Path = QDir::tempPath() + "/parakeet_test_export.m3u8";
-  QString csvPath = QDir::tempPath() + "/parakeet_test_export.csv";
-  QString jsonPath = QDir::tempPath() + "/parakeet_test_export.json";
+  QString m3u8Path = QDir::tempPath() + "/picaudio_test_export.m3u8";
+  QString csvPath = QDir::tempPath() + "/picaudio_test_export.csv";
+  QString jsonPath = QDir::tempPath() + "/picaudio_test_export.json";
 
   EXPECT_TRUE(bridge.exportActiveView(m3u8Path, "m3u8"));
   EXPECT_TRUE(QFile::exists(m3u8Path));
@@ -690,7 +690,7 @@ TEST_F(SettingsTest, PlaybackAndLibraryMenuActions) {
 
   // Log file path
   QString logPath = bridge.getLogFilePath();
-  EXPECT_TRUE(logPath.endsWith("parakeet.log"));
+  EXPECT_TRUE(logPath.endsWith("picaudio.log"));
   EXPECT_TRUE(QFile::exists(logPath));
 
   // Deduplicate tracks
@@ -722,7 +722,7 @@ TEST_F(SettingsTest, PlaybackAndLibraryMenuActions) {
   ctx1.title = "Context Track 1";
   ctx1.artist = "Context Artist";
   ctx1.album = "Context Album";
-  ctx1.filePath = "/tmp/parakeet_test_ctx_1.mp3";
+  ctx1.filePath = "/tmp/picaudio_test_ctx_1.mp3";
   ctx1.durationMs = 120000;
 
   core::Track ctx2;
@@ -730,7 +730,7 @@ TEST_F(SettingsTest, PlaybackAndLibraryMenuActions) {
   ctx2.title = "Context Track 2";
   ctx2.artist = "Context Artist";
   ctx2.album = "Context Album";
-  ctx2.filePath = "/tmp/parakeet_test_ctx_2.mp3";
+  ctx2.filePath = "/tmp/picaudio_test_ctx_2.mp3";
   ctx2.durationMs = 150000;
 
   core::Track ctx3;
@@ -738,7 +738,7 @@ TEST_F(SettingsTest, PlaybackAndLibraryMenuActions) {
   ctx3.title = "Context Track 3";
   ctx3.artist = "Other Artist";
   ctx3.album = "Other Album";
-  ctx3.filePath = "/tmp/parakeet_test_ctx_3.mp3";
+  ctx3.filePath = "/tmp/picaudio_test_ctx_3.mp3";
   ctx3.durationMs = 180000;
 
   db.saveTrack(ctx1);
@@ -782,7 +782,7 @@ TEST_F(SettingsTest, PlaybackAndLibraryMenuActions) {
   m1["id"] = "ctx_1";
   m1["title"] = "Context Track 1";
   m1["artist"] = "Context Artist";
-  m1["filePath"] = "/tmp/parakeet_test_ctx_1.mp3";
+  m1["filePath"] = "/tmp/picaudio_test_ctx_1.mp3";
   m1["durationMs"] = 120000;
   plTracks.append(m1);
 
@@ -796,20 +796,20 @@ TEST_F(SettingsTest, PlaybackAndLibraryMenuActions) {
   QFile::remove(ctxPlPath);
 
   // Delete File from Disk
-  QFile dummyFile("/tmp/parakeet_test_delete.mp3");
+  QFile dummyFile("/tmp/picaudio_test_delete.mp3");
   EXPECT_TRUE(dummyFile.open(QIODevice::WriteOnly));
   dummyFile.write("dummy audio content");
   dummyFile.close();
-  EXPECT_TRUE(QFile::exists("/tmp/parakeet_test_delete.mp3"));
+  EXPECT_TRUE(QFile::exists("/tmp/picaudio_test_delete.mp3"));
 
   core::Track delTrack;
   delTrack.id = "del_1";
   delTrack.title = "Delete Me";
-  delTrack.filePath = "/tmp/parakeet_test_delete.mp3";
+  delTrack.filePath = "/tmp/picaudio_test_delete.mp3";
   db.saveTrack(delTrack);
 
   EXPECT_TRUE(bridge.deleteFilesFromDisk(QStringList{"del_1"}));
-  EXPECT_FALSE(QFile::exists("/tmp/parakeet_test_delete.mp3"));
+  EXPECT_FALSE(QFile::exists("/tmp/picaudio_test_delete.mp3"));
   EXPECT_FALSE(db.getTrackById("del_1").has_value());
 
   // Issue #11: Column Headers, Widths, Visibility, Sorting & Viewport Actions
@@ -964,7 +964,7 @@ TEST_F(SettingsTest, AlbumCardAndFolderContextMenuTest) {
   // 5. Monitored folders context actions
   QString testDir =
       QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
-      "/parakeet_monitored_test";
+      "/picaudio_monitored_test";
   QDir().mkpath(testDir);
   bridge.addMonitoredFolder(testDir);
   EXPECT_TRUE(bridge.monitoredFolders().contains(testDir));
@@ -1382,7 +1382,7 @@ TEST_F(SettingsTest, PlaybackSessionSaveAndRestoreModes) {
   // Save session
   bridge.savePlaybackSession();
 
-  QSettings s("ParakeetAudio", "Parakeet");
+  QSettings s("PicAudio", "PicAudio");
   s.sync();
   EXPECT_TRUE(s.value("session/has_session").toBool());
   EXPECT_EQ(s.value("session/track_id").toString(), "sess_1");

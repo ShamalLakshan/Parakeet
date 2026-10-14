@@ -37,10 +37,12 @@ bool DesktopTrayAdapter::initialize() {
   }
 
   // Load application icon from resource or create clean geometric fallback
-  if (QFile::exists(QStringLiteral(":/PlayerUI/icons/parakeet.svg"))) {
-    m_baseIcon = QIcon(QStringLiteral(":/PlayerUI/icons/parakeet.svg"));
-  } else if (QFile::exists(QStringLiteral(":/icons/parakeet.svg"))) {
-    m_baseIcon = QIcon(QStringLiteral(":/icons/parakeet.svg"));
+  if (QFile::exists(QStringLiteral(":/icons/picaudio.png"))) {
+    m_baseIcon = QIcon(QStringLiteral(":/icons/picaudio.png"));
+  } else if (QFile::exists(QStringLiteral(":/icons/picaudio.svg"))) {
+    m_baseIcon = QIcon(QStringLiteral(":/icons/picaudio.svg"));
+  } else if (QFile::exists(QStringLiteral(":/PlayerUI/icons/picaudio.png"))) {
+    m_baseIcon = QIcon(QStringLiteral(":/PlayerUI/icons/picaudio.png"));
   } else {
     // Generate clean audio-themed tray icon
     QPixmap pm(32, 32);
@@ -73,7 +75,7 @@ bool DesktopTrayAdapter::isAvailable() const {
 void DesktopTrayAdapter::setupMenu() {
   m_menu = new QMenu();
 
-  m_trackInfoAction = m_menu->addAction(QStringLiteral("Parakeet"));
+  m_trackInfoAction = m_menu->addAction(QStringLiteral("PicAudio"));
   m_trackInfoAction->setEnabled(false);
 
   m_menu->addSeparator();
@@ -110,7 +112,7 @@ void DesktopTrayAdapter::setupMenu() {
 
   m_menu->addSeparator();
 
-  m_quitAction = m_menu->addAction(QStringLiteral("Quit Parakeet"), this,
+  m_quitAction = m_menu->addAction(QStringLiteral("Quit PicAudio"), this,
                                    [this]() { emit quitRequested(); });
 
   m_trayIcon->setContextMenu(m_menu);
@@ -131,7 +133,7 @@ void DesktopTrayAdapter::updateTrackInfo(const QString &title,
               : QStringLiteral("%1 - %2").arg(m_currentArtist, m_currentTitle);
       m_trackInfoAction->setText(text);
     } else {
-      m_trackInfoAction->setText(QStringLiteral("Parakeet"));
+      m_trackInfoAction->setText(QStringLiteral("PicAudio"));
     }
   }
 
@@ -175,10 +177,10 @@ QString DesktopTrayAdapter::formattedTooltip() const {
         m_positionStr.isEmpty() ? QStringLiteral("00:00") : m_positionStr;
     QString dur =
         m_durationStr.isEmpty() ? QStringLiteral("00:00") : m_durationStr;
-    return QStringLiteral("Parakeet\n%1 - %2\n[%3 / %4]")
+    return QStringLiteral("PicAudio\n%1 - %2\n[%3 / %4]")
         .arg(artist, title, pos, dur);
   }
-  return QStringLiteral("Parakeet\nStopped");
+  return QStringLiteral("PicAudio\nStopped");
 }
 
 void DesktopTrayAdapter::updateTooltip() {

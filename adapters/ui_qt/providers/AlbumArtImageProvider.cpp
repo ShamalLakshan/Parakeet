@@ -260,7 +260,7 @@ QPixmap AlbumArtImageProvider::generatePlaceholder(const QString &id, int width,
   font.setLetterSpacing(QFont::AbsoluteSpacing, 1.2);
   p.setFont(font);
   p.drawText(QRect(8, height - 26, width - 16, 18), Qt::AlignCenter,
-             "PARAKEET");
+             "PICAUDIO");
 
   return pix;
 }

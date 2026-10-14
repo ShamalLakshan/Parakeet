@@ -5,24 +5,24 @@
 #include <QFileInfo>
 #include <QUrl>
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
 #include <QDBusConnectionInterface>
 #include <QDBusMessage>
 #endif
 
 namespace adapters {
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
 
 MprisRootAdaptor::MprisRootAdaptor(MprisAdapter *parent)
     : QDBusAbstractAdaptor(parent), m_adapter(parent) {}
 
 QString MprisRootAdaptor::identity() const {
-  return QStringLiteral("Parakeet");
+  return QStringLiteral("PicAudio");
 }
 
 QString MprisRootAdaptor::desktopEntry() const {
-  return QStringLiteral("parakeet");
+  return QStringLiteral("picaudio");
 }
 
 QStringList MprisRootAdaptor::supportedUriSchemes() const {
@@ -173,27 +173,27 @@ void MprisPlayerAdaptor::OpenUri(const QString &Uri) {
   }
 }
 
-#endif // PARAKEET_ENABLE_DBUS
+#endif // PICAUDIO_ENABLE_DBUS
 
 MprisAdapter::MprisAdapter(QObject *parent) : PlatformMediaControls(parent) {
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
   m_rootAdaptor = new MprisRootAdaptor(this);
   m_playerAdaptor = new MprisPlayerAdaptor(this);
 #endif
 }
 
 MprisAdapter::~MprisAdapter() {
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
   if (m_registered) {
     QDBusConnection bus = QDBusConnection::sessionBus();
     bus.unregisterObject(QStringLiteral("/org/mpris/MediaPlayer2"));
-    bus.unregisterService(QStringLiteral("org.mpris.MediaPlayer2.parakeet"));
+    bus.unregisterService(QStringLiteral("org.mpris.MediaPlayer2.picaudio"));
   }
 #endif
 }
 
 bool MprisAdapter::initialize() {
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
   QDBusConnection bus = QDBusConnection::sessionBus();
   if (!bus.isConnected()) {
     return false;
@@ -206,9 +206,9 @@ bool MprisAdapter::initialize() {
   }
 
   // Try standard service name, fall back to PID-suffixed name
-  QString serviceName = QStringLiteral("org.mpris.MediaPlayer2.parakeet");
+  QString serviceName = QStringLiteral("org.mpris.MediaPlayer2.picaudio");
   if (!bus.registerService(serviceName)) {
-    serviceName = QStringLiteral("org.mpris.MediaPlayer2.parakeet.instance%1")
+    serviceName = QStringLiteral("org.mpris.MediaPlayer2.picaudio.instance%1")
                       .arg(QCoreApplication::applicationPid());
     if (!bus.registerService(serviceName)) {
       return false;
@@ -236,7 +236,7 @@ void MprisAdapter::updateMetadata(const QString &title, const QString &artist,
       QStringLiteral("/org/mpris/MediaPlayer2/Track/%1").arg(safeId);
 
   QVariantMap meta;
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
   meta.insert(QStringLiteral("mpris:trackid"),
               QVariant::fromValue(QDBusObjectPath(m_currentTrackId)));
 #else
@@ -390,7 +390,7 @@ void MprisAdapter::triggerSeek(qlonglong offsetUs) {
   m_positionMs = newPosMs;
   emit seekRequested(newPosMs);
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
   if (m_playerAdaptor) {
     emit m_playerAdaptor->Seeked(newPosMs * 1000);
   }
@@ -404,7 +404,7 @@ void MprisAdapter::triggerSetPosition(const QString &trackId,
     m_positionMs = posMs;
     emit seekRequested(posMs);
 
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
     if (m_playerAdaptor) {
       emit m_playerAdaptor->Seeked(posMs * 1000);
     }
@@ -414,7 +414,7 @@ void MprisAdapter::triggerSetPosition(const QString &trackId,
 
 void MprisAdapter::emitPropertiesChanged(const QString &interface,
                                          const QVariantMap &changedProperties) {
-#if defined(PARAKEET_ENABLE_DBUS)
+#if defined(PICAUDIO_ENABLE_DBUS)
   if (!m_registered || changedProperties.isEmpty()) {
     return;
   }

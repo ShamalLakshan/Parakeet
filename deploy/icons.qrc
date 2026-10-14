@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/icons">
-        <file alias="parakeet.svg">linux/icons/parakeet.svg</file>
+        <file alias="picaudio.svg">linux/icons/picaudio.svg</file>
+        <file alias="picaudio.png">linux/icons/picaudio.png</file>
     </qresource>
 </RCC>
