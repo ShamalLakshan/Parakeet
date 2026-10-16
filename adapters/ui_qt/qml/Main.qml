@@ -716,6 +716,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.preferredHeight: 28
             color: Theme.surface
+            clip: true
 
             RowLayout {
                 anchors.fill: parent
@@ -726,10 +727,17 @@ ApplicationWindow {
                 // Brand logo / title
                 RowLayout {
                     spacing: 6
+                    Layout.alignment: Qt.AlignVCenter
+
                     Image {
                         source: "qrc:/icons/picaudio.png"
                         width: 14
                         height: 14
+                        sourceSize.width: 14
+                        sourceSize.height: 14
+                        Layout.preferredWidth: 14
+                        Layout.preferredHeight: 14
+                        Layout.alignment: Qt.AlignVCenter
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                         mipmap: true
@@ -740,13 +748,25 @@ ApplicationWindow {
                         font.bold: true
                         font.letterSpacing: 1.5
                         color: Theme.textPrimary
+                        Layout.alignment: Qt.AlignVCenter
                     }
                 }
 
-                Rectangle { width: 1; height: 14; color: Theme.panelBorder; Layout.leftMargin: 6; Layout.rightMargin: 6 }
+                Rectangle {
+                    width: 1
+                    height: 14
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 14
+                    Layout.alignment: Qt.AlignVCenter
+                    color: Theme.panelBorder
+                    Layout.leftMargin: 6
+                    Layout.rightMargin: 6
+                }
 
                 // Desktop Menu Bar Component
                 AppMenuBar {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredHeight: 22
                     showLeftPanel: root.showLeftPanel
                     showColumnBrowser: root.showColumnBrowser
                     showRightPanel: root.showRightPanel
@@ -889,15 +909,18 @@ ApplicationWindow {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.SplitHCursor
-                    property int startX: 0
+                    property real startRootX: 0
                     property int startWidth: 0
                     onPressed: (mouse) => {
-                        startX = mouse.x;
+                        var pt = mapToItem(root.contentItem, mouse.x, mouse.y);
+                        startRootX = pt.x;
                         startWidth = bridge.leftPanelWidth;
                     }
                     onPositionChanged: (mouse) => {
                         if (pressed) {
-                            bridge.leftPanelWidth = startWidth + (mouse.x - startX);
+                            var pt = mapToItem(root.contentItem, mouse.x, mouse.y);
+                            var delta = pt.x - startRootX;
+                            bridge.leftPanelWidth = Math.max(140, Math.min(450, Math.round(startWidth + delta)));
                         }
                     }
                     onDoubleClicked: bridge.leftPanelWidth = 210
@@ -962,15 +985,18 @@ ApplicationWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.SplitVCursor
-                            property int startY: 0
+                            property real startRootY: 0
                             property int startHeight: 0
                             onPressed: (mouse) => {
-                                startY = mouse.y;
+                                var pt = mapToItem(root.contentItem, mouse.x, mouse.y);
+                                startRootY = pt.y;
                                 startHeight = bridge.columnBrowserHeight;
                             }
                             onPositionChanged: (mouse) => {
                                 if (pressed) {
-                                    bridge.columnBrowserHeight = startHeight + (mouse.y - startY);
+                                    var pt = mapToItem(root.contentItem, mouse.x, mouse.y);
+                                    var delta = pt.y - startRootY;
+                                    bridge.columnBrowserHeight = Math.max(80, Math.min(300, Math.round(startHeight + delta)));
                                 }
                             }
                             onDoubleClicked: bridge.columnBrowserHeight = 121
@@ -1097,15 +1123,18 @@ ApplicationWindow {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.SplitHCursor
-                    property int startX: 0
+                    property real startRootX: 0
                     property int startWidth: 0
                     onPressed: (mouse) => {
-                        startX = mouse.x;
+                        var pt = mapToItem(root.contentItem, mouse.x, mouse.y);
+                        startRootX = pt.x;
                         startWidth = bridge.rightPanelWidth;
                     }
                     onPositionChanged: (mouse) => {
                         if (pressed) {
-                            bridge.rightPanelWidth = startWidth - (mouse.x - startX);
+                            var pt = mapToItem(root.contentItem, mouse.x, mouse.y);
+                            var delta = pt.x - startRootX;
+                            bridge.rightPanelWidth = Math.max(200, Math.min(450, Math.round(startWidth - delta)));
                         }
                     }
                     onDoubleClicked: bridge.rightPanelWidth = 270

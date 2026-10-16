@@ -21,9 +21,6 @@ Rectangle {
     color: Theme.background
     clip: true
 
-    Behavior on Layout.preferredHeight {
-        NumberAnimation { duration: 160; easing.type: Easing.InOutQuad }
-    }
 
     RowLayout {
         anchors.fill: parent

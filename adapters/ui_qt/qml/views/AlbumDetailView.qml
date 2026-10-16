@@ -118,6 +118,7 @@ Item {
             border.width: 1
 
             ColumnLayout {
+                id: detailHeaderCol
                 anchors.fill: parent
                 anchors.margins: 12
                 spacing: 8

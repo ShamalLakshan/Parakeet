@@ -9,8 +9,8 @@ Dialog {
     modal: true
     focus: true
     anchors.centerIn: Overlay.overlay
-    width: 460
-    height: isSmart ? 320 : 250
+    width: Math.min(460, Overlay.overlay ? Overlay.overlay.width - 32 : 460)
+    height: Math.min(isSmart ? 340 : 260, Overlay.overlay ? Overlay.overlay.height - 32 : (isSmart ? 340 : 260))
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 

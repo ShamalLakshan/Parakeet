@@ -8,10 +8,10 @@ import "../components"
 Dialog {
     id: root
     title: "Preferences & Settings"
-    width: 840
-    height: 600
+    width: Math.min(840, Overlay.overlay ? Overlay.overlay.width - 32 : 840)
+    height: Math.min(620, Overlay.overlay ? Overlay.overlay.height - 32 : 620)
     modal: true
-    anchors.centerIn: parent
+    anchors.centerIn: Overlay.overlay
 
     property int activeCategory: 1 // default to Themes & Appearance
 
@@ -229,8 +229,8 @@ Dialog {
         id: confirmClearDbDialog
         title: "Clear Entire Music Library"
         modal: true
-        anchors.centerIn: parent
-        width: 420
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - 32 : 420)
         standardButtons: Dialog.Ok | Dialog.Cancel
         background: Rectangle {
             color: Theme.surface
@@ -263,8 +263,8 @@ Dialog {
         id: resetFactoryDefaultsDialog
         title: "Reset All Preferences to Defaults"
         modal: true
-        anchors.centerIn: parent
-        width: 420
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - 32 : 420)
         standardButtons: Dialog.Ok | Dialog.Cancel
         background: Rectangle {
             color: Theme.surface
@@ -303,8 +303,8 @@ Dialog {
         id: rebindHotkeyDialog
         title: "Rebind Shortcut"
         modal: true
-        anchors.centerIn: parent
-        width: 440
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440)
         standardButtons: Dialog.Ok | Dialog.Cancel
         background: Rectangle {
             color: Theme.surface

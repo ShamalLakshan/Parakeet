@@ -92,6 +92,14 @@ class QtBridge : public QObject {
   Q_PROPERTY(
       int activeLyricIndex READ activeLyricIndex NOTIFY activeLyricIndexChanged)
 
+  // Real-Time Audio Visualizer Data (Issue #66)
+  Q_PROPERTY(QVariantList visualizerBands READ visualizerBands NOTIFY
+                 visualizerDataChanged)
+  Q_PROPERTY(QVariantList visualizerWaveform READ visualizerWaveform NOTIFY
+                 visualizerDataChanged)
+  Q_PROPERTY(
+      float visualizerLevel READ visualizerLevel NOTIFY visualizerDataChanged)
+
   // Queue & Playback Modes
   Q_PROPERTY(int repeatMode READ repeatMode WRITE setRepeatMode NOTIFY
                  playbackModeChanged)
@@ -388,6 +396,14 @@ public:
     return m_currentLyricsLines;
   }
   [[nodiscard]] int activeLyricIndex() const { return m_activeLyricIndex; }
+
+  [[nodiscard]] QVariantList visualizerBands() const {
+    return m_visualizerBands;
+  }
+  [[nodiscard]] QVariantList visualizerWaveform() const {
+    return m_visualizerWaveform;
+  }
+  [[nodiscard]] float visualizerLevel() const { return m_visualizerLevel; }
 
   [[nodiscard]] int repeatMode() const;
   [[nodiscard]] int shuffleMode() const;
@@ -1056,6 +1072,7 @@ signals:
   void showRemainingTimeChanged();
   void lyricsChanged();
   void activeLyricIndexChanged();
+  void visualizerDataChanged();
 
 private:
   struct LyricLine {
@@ -1065,6 +1082,8 @@ private:
   };
 
   void setupPositionTimer();
+  void setupVisualizerTimer();
+  void updateVisualizerData();
   void updatePlaybackState(const core::Track &track);
   void loadLyricsForTrack(const QString &filePath);
   void parseLrcContent(const QString &content);
@@ -1269,4 +1288,8 @@ private:
 
   QMediaDevices *m_mediaDevices{nullptr};
   QTimer *m_positionTimer{nullptr};
+  QTimer *m_visualizerTimer{nullptr};
+  QVariantList m_visualizerBands;
+  QVariantList m_visualizerWaveform;
+  float m_visualizerLevel{0.0f};
 };

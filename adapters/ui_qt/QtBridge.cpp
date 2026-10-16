@@ -68,6 +68,7 @@ QtBridge::QtBridge(core::PlayerService &player, core::LibraryService &library,
   refreshLibraryStats();
   refreshHistory();
   setupPositionTimer();
+  setupVisualizerTimer();
 
   connect(m_trackModel, &TrackListModel::sortChanged, this,
           &QtBridge::saveColumnSettings);
@@ -367,6 +368,41 @@ void QtBridge::setupPositionTimer() {
       }
     }
   });
+}
+
+void QtBridge::setupVisualizerTimer() {
+  m_visualizerTimer = new QTimer(this);
+  m_visualizerTimer->setInterval(33); // ~30-60 FPS smooth updates
+  connect(m_visualizerTimer, &QTimer::timeout, this,
+          &QtBridge::updateVisualizerData);
+  m_visualizerTimer->start();
+}
+
+void QtBridge::updateVisualizerData() {
+  auto bands = m_player.getFrequencyBands(36);
+  auto wave = m_player.getWaveformSamples(64);
+  float level = m_player.getAudioLevel();
+
+  bool hasEnergy = (level > 0.001f);
+  if (!hasEnergy && !m_isPlaying && m_visualizerLevel < 0.001f &&
+      m_visualizerBands.isEmpty()) {
+    return;
+  }
+
+  m_visualizerBands.clear();
+  m_visualizerBands.reserve(static_cast<qsizetype>(bands.size()));
+  for (float b : bands) {
+    m_visualizerBands.append(b);
+  }
+
+  m_visualizerWaveform.clear();
+  m_visualizerWaveform.reserve(static_cast<qsizetype>(wave.size()));
+  for (float w : wave) {
+    m_visualizerWaveform.append(w);
+  }
+
+  m_visualizerLevel = level;
+  emit visualizerDataChanged();
 }
 
 QString QtBridge::formatTime(qint64 ms) {

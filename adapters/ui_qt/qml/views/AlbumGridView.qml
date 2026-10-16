@@ -15,8 +15,10 @@ ScrollView {
         id: albumGridView
         anchors.fill: parent
         anchors.margins: 14
-        cellWidth: Math.max(170, width / Math.floor(width / 175))
-        cellHeight: 230
+        property int minColWidth: 160
+        property int numCols: Math.max(1, Math.floor((width - 4) / minColWidth))
+        cellWidth: Math.floor((width - 4) / numCols)
+        cellHeight: cellWidth + 68
         model: bridge.albumModel
         clip: true
 
@@ -35,7 +37,7 @@ ScrollView {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: width
+                    Layout.preferredHeight: albumGridView.cellWidth - 26
                     color: Theme.background
                     border.color: Theme.panelBorder
                     clip: true

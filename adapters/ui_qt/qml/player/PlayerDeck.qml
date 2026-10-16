@@ -27,7 +27,7 @@ Rectangle {
             z: 2
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
-            width: Math.min(560, Math.max(340, parent.width * 0.42))
+            width: Math.min(540, Math.max(260, parent.width * 0.38))
             spacing: 2
 
             // Control Buttons Container (Play/Pause strictly centered at 50% width)
@@ -325,11 +325,13 @@ Rectangle {
 
                 Item {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: deckTrackCol.implicitHeight
+                    implicitHeight: deckTrackCol.implicitHeight
 
                     ColumnLayout {
                         id: deckTrackCol
-                        anchors.fill: parent
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
                         spacing: 2
 
                         Text {
@@ -453,7 +455,7 @@ Rectangle {
             Slider {
                 id: volumeSlider
                 enabled: !bridge.volumeLocked
-                Layout.preferredWidth: 80
+                Layout.preferredWidth: (root.width < 750) ? 60 : 80
                 from: 0
                 to: 1
                 value: bridge.volume

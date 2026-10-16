@@ -2,14 +2,14 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
+import "../components"
 
 Dialog {
     id: root
-    title: "Delete File from Disk"
     modal: true
     focus: true
     anchors.centerIn: Overlay.overlay
-    width: 440
+    width: Math.min(460, Overlay.overlay ? Overlay.overlay.width - 32 : 460)
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
@@ -23,22 +23,30 @@ Dialog {
     }
 
     contentItem: ColumnLayout {
-        spacing: 14
-        anchors.fill: parent
-        anchors.margins: 18
+        spacing: 0
+        clip: true
 
-        RowLayout {
-            spacing: 12
+        // Danger Dialog Header
+        Rectangle {
             Layout.fillWidth: true
-            VectorIcon {
-                name: "trash"
-                width: 24
-                height: 24
-                color: Theme.error
-            }
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 4
+            Layout.preferredHeight: 44
+            color: Theme.surfaceElevated
+            border.color: Theme.panelBorder
+            border.width: 1
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Theme.panelPadding
+                anchors.rightMargin: Theme.panelPadding
+                spacing: Theme.spacingMedium
+
+                VectorIcon {
+                    name: "trash"
+                    width: 15
+                    height: 15
+                    color: Theme.error
+                }
+
                 Text {
                     text: root.tracksToDelete.length > 1
                         ? ("Delete " + root.tracksToDelete.length + " Files from Disk?")
@@ -46,73 +54,147 @@ Dialog {
                     font.pixelSize: Theme.fontSizeLarge
                     font.bold: true
                     color: Theme.textPrimary
-                }
-                Text {
-                    text: "This will permanently delete the selected audio file(s) from your storage device and library database. This action CANNOT be undone."
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.textMuted
-                    wrapMode: Text.Wrap
                     Layout.fillWidth: true
+                    elide: Text.ElideRight
                 }
-            }
-        }
 
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(120, Math.max(36, root.tracksToDelete.length * 24 + 8))
-            color: Theme.surfaceElevated
-            border.color: Theme.panelBorder
-            border.width: 1
-            radius: Theme.cornerRadiusSmall
-            clip: true
-
-            ListView {
-                anchors.fill: parent
-                anchors.margins: 6
-                model: root.tracksToDelete
-                ScrollBar.vertical: ScrollBar {}
-                delegate: Text {
-                    width: parent.width
-                    text: (modelData.artist ? (modelData.artist + " - ") : "") + (modelData.title || modelData.filePath || "")
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.textSecondary
-                    elide: Text.ElideMiddle
-                }
-            }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            Item { Layout.fillWidth: true }
-
-            Button {
-                text: "Cancel"
-                onClicked: root.close()
-            }
-
-            Button {
-                contentItem: Text {
-                    text: "Delete Permanently"
-                    color: Theme.textPrimary
-                    font.bold: true
-                    font.pixelSize: Theme.fontSizeSmall
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                background: Rectangle {
-                    color: Theme.error
+                Rectangle {
+                    width: 24
+                    height: 24
                     radius: Theme.cornerRadiusSmall
+                    color: closeMouse.containsMouse ? Theme.selection : "transparent"
+
+                    VectorIcon {
+                        anchors.centerIn: parent
+                        name: "clear"
+                        width: 10
+                        height: 10
+                        color: closeMouse.containsMouse ? Theme.textPrimary : Theme.textMuted
+                    }
+
+                    MouseArea {
+                        id: closeMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.close()
+                    }
                 }
-                onClicked: {
-                    var ids = [];
-                    for (var i = 0; i < root.tracksToDelete.length; ++i) {
-                        if (root.tracksToDelete[i].id) {
-                            ids.push(root.tracksToDelete[i].id);
+            }
+        }
+
+        // Body Content
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.margins: Theme.panelPadding
+            spacing: Theme.spacingMedium
+
+            Text {
+                text: "This will permanently delete the selected audio file(s) from your storage device and library database. This action CANNOT be undone."
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.textMuted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(130, Math.max(40, root.tracksToDelete.length * 24 + 12))
+                color: Theme.surfaceElevated
+                border.color: Theme.panelBorder
+                border.width: 1
+                radius: Theme.cornerRadiusSmall
+                clip: true
+
+                ListView {
+                    id: fileList
+                    anchors.fill: parent
+                    anchors.margins: 6
+                    model: root.tracksToDelete
+                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                    delegate: Text {
+                        width: fileList.width - 12
+                        text: (modelData.artist ? (modelData.artist + " - ") : "") + (modelData.title || modelData.filePath || "")
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.textSecondary
+                        elide: Text.ElideMiddle
+                    }
+                }
+            }
+
+            // Footer Actions
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: Theme.spacingSmall
+                spacing: Theme.spacingMedium
+
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredWidth: 80
+                    Layout.preferredHeight: 30
+                    radius: Theme.cornerRadiusSmall
+                    color: cancelMouse.containsMouse ? Theme.surfaceElevated : "transparent"
+                    border.color: Theme.panelBorder
+                    clip: true
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Cancel"
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.textSecondary
+                    }
+
+                    MouseArea {
+                        id: cancelMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.close()
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: 140
+                    Layout.preferredHeight: 30
+                    radius: Theme.cornerRadiusSmall
+                    color: deleteMouse.containsMouse ? Qt.darker(Theme.error, 1.2) : Theme.error
+                    clip: true
+
+                    RowLayout {
+                        anchors.centerIn: parent
+                        spacing: 6
+                        VectorIcon {
+                            name: "trash"
+                            width: 11
+                            height: 11
+                            color: Theme.textPrimary
+                        }
+                        Text {
+                            text: "Delete Permanently"
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.bold: true
+                            color: Theme.textPrimary
                         }
                     }
-                    root.close();
-                    if (ids.length > 0) {
-                        bridge.deleteFilesFromDisk(ids);
+
+                    MouseArea {
+                        id: deleteMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            var ids = [];
+                            for (var i = 0; i < root.tracksToDelete.length; ++i) {
+                                if (root.tracksToDelete[i].id) {
+                                    ids.push(root.tracksToDelete[i].id);
+                                }
+                            }
+                            root.close();
+                            if (ids.length > 0) {
+                                bridge.deleteFilesFromDisk(ids);
+                            }
+                        }
                     }
                 }
             }

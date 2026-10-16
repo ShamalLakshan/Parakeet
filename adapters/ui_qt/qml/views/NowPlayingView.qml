@@ -440,23 +440,25 @@ Item {
                         // Upper Showcase: Large Artwork & Track Information Card
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Math.max(300, isWideLayout ? 320 : artworkBox.height + metaCol.implicitHeight + 36)
+                            Layout.preferredHeight: isWideLayout ? 320 : (artworkBox.Layout.preferredHeight + metaCol.implicitHeight + Theme.panelPadding * 3)
                             color: Theme.surface
                             radius: Theme.cornerRadiusMedium * 2
                             border.color: Theme.panelBorder
                             border.width: 1
 
-                            RowLayout {
+                            GridLayout {
                                 anchors.fill: parent
                                 anchors.margins: Theme.panelPadding * 1.5
-                                spacing: Theme.spacingLarge * 1.5
+                                columns: isWideLayout ? 2 : 1
+                                columnSpacing: Theme.spacingLarge * 1.5
+                                rowSpacing: Theme.spacingLarge
 
                                 // Showcase Album Artwork Box
                                 Rectangle {
                                     id: artworkBox
-                                    Layout.preferredWidth: Math.min(270, Math.min(parent.width * 0.42, 290))
+                                    Layout.preferredWidth: isWideLayout ? Math.min(270, Math.min(parent.width * 0.42, 290)) : Math.min(220, Math.min(parent.width - 40, 220))
                                     Layout.preferredHeight: Layout.preferredWidth
-                                    Layout.alignment: Qt.AlignVCenter
+                                    Layout.alignment: isWideLayout ? Qt.AlignVCenter : Qt.AlignHCenter
                                     radius: Theme.cornerRadiusMedium * 2
                                     color: Theme.surfaceElevated
                                     border.color: Theme.panelBorder
@@ -536,8 +538,8 @@ Item {
                                 ColumnLayout {
                                     id: metaCol
                                     Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    Layout.alignment: Qt.AlignVCenter
+                                    Layout.fillHeight: isWideLayout
+                                    Layout.alignment: isWideLayout ? Qt.AlignVCenter : Qt.AlignHCenter
                                     spacing: Theme.spacingMedium
 
                                     // Category / Context Breadcrumb
@@ -590,9 +592,10 @@ Item {
                                     Item { height: 4; width: 1 }
 
                                     // Audiophile Quality Ribbon (Formal & Sleek)
-                                    RowLayout {
+                                    Flow {
+                                        width: metaCol.width
                                         spacing: 6
-                                        Layout.fillWidth: true
+                                        clip: true
 
                                         // Hi-Res Badge
                                         Rectangle {
@@ -957,7 +960,7 @@ Item {
                     // Left Studio Column: Artwork, Track Info, Transport & Compact Wave
                     Rectangle {
                         Layout.fillHeight: true
-                        Layout.preferredWidth: root.isWideLayout ? Math.min(460, Math.max(340, parent.width * 0.44)) : parent.width
+                        Layout.preferredWidth: root.isWideLayout ? Math.min(460, Math.max(340, Math.round(parent.width * 0.44))) : -1
                         Layout.fillWidth: !root.isWideLayout
                         visible: root.isWideLayout || root.compactTab === 0
                         color: Theme.surface

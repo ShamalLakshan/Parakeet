@@ -9,8 +9,8 @@ Dialog {
     modal: true
     focus: true
     anchors.centerIn: Overlay.overlay
-    width: 480
-    height: 400
+    width: Math.min(480, Overlay.overlay ? Overlay.overlay.width - 32 : 480)
+    height: Math.min(420, Overlay.overlay ? Overlay.overlay.height - 32 : 420)
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
@@ -106,6 +106,8 @@ Dialog {
                         source: "qrc:/icons/picaudio.png"
                         width: 52
                         height: 52
+                        sourceSize.width: 52
+                        sourceSize.height: 52
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                         mipmap: true

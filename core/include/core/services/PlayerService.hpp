@@ -115,6 +115,29 @@ public:
     return m_queueService;
   }
 
+  [[nodiscard]] std::vector<float>
+  getFrequencyBands(size_t bandCount = 36) const {
+    if (m_audioEngine) {
+      return m_audioEngine->getFrequencyBands(bandCount);
+    }
+    return {};
+  }
+
+  [[nodiscard]] std::vector<float>
+  getWaveformSamples(size_t sampleCount = 64) const {
+    if (m_audioEngine) {
+      return m_audioEngine->getWaveformSamples(sampleCount);
+    }
+    return {};
+  }
+
+  [[nodiscard]] float getAudioLevel() const {
+    if (m_audioEngine) {
+      return m_audioEngine->getAudioLevel();
+    }
+    return 0.0f;
+  }
+
   void onTrackChanged(std::function<void(const Track &)> callback) {
     m_trackChangedCallback = callback;
   }

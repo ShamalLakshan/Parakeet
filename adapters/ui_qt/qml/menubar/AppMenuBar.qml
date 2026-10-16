@@ -49,14 +49,14 @@ RowLayout {
     }
 
     function zoomIn() {
-        if (Theme.uiScale < 2.0) {
-            Theme.uiScale = Math.min(2.0, Theme.uiScale + 0.1);
+        if (Theme.uiScale < 1.5) {
+            Theme.uiScale = Math.min(1.5, Math.round((Theme.uiScale + 0.1) * 10) / 10);
         }
     }
 
     function zoomOut() {
-        if (Theme.uiScale > 0.6) {
-            Theme.uiScale = Math.max(0.6, Theme.uiScale - 0.1);
+        if (Theme.uiScale > 0.7) {
+            Theme.uiScale = Math.max(0.7, Math.round((Theme.uiScale - 0.1) * 10) / 10);
         }
     }
 
